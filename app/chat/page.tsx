@@ -1,3 +1,9 @@
+// FILE: fundraise-coach/app/chat/page.tsx
+// PURPOSE: Protected chat UI for Fundraise Coach demo.
+// NOTES:
+// - Calls /api/chat for responses (RAG + sources)
+// - Includes "Rebuild Knowledge" button that calls /api/chat/reload (clears in-memory RAG cache)
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,6 +21,9 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [reloading, setReloading] = useState(false);
+  const [reloadStatus, setReloadStatus] = useState<string>("");
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email ?? "");
@@ -24,6 +33,25 @@ export default function ChatPage() {
   async function signOut() {
     await supabase.auth.signOut();
     window.location.href = "/login";
+  }
+
+  async function rebuildKnowledge() {
+    if (reloading) return;
+    setReloading(true);
+    setReloadStatus("");
+
+    try {
+      const res = await fetch("/api/chat/reload", { method: "POST" });
+      const data = await res.json();
+      setReloadStatus(data?.message ?? "Knowledge reloaded.");
+      // Clear after a moment so the UI stays clean
+      setTimeout(() => setReloadStatus(""), 4000);
+    } catch {
+      setReloadStatus("Failed to reload knowledge. Check server logs.");
+      setTimeout(() => setReloadStatus(""), 6000);
+    } finally {
+      setReloading(false);
+    }
   }
 
   async function sendMessage() {
@@ -54,7 +82,7 @@ export default function ChatPage() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -68,95 +96,177 @@ export default function ChatPage() {
   }
 
   return (
-    <main style={{ maxWidth: 760, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Fundraise Coach (Demo)</h1>
-        <button onClick={signOut} style={{ padding: 10, borderRadius: 10 }}>
-          Sign out
-        </button>
-      </div>
-
-      <p style={{ marginTop: 8, color: "#555" }}>
-        Logged in as: <b>{email || "(not logged in)"}</b>
-      </p>
-
-      {/* Chat messages */}
+    <main
+      style={{
+        maxWidth: 860,
+        margin: "40px auto",
+        fontFamily: "sans-serif",
+        padding: 16,
+        color: "#e5e7eb",
+      }}
+    >
+      {/* Dark background wrapper */}
       <div
         style={{
-          marginTop: 20,
-          padding: 16,
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          minHeight: 300,
+          background: "#050505",
+          border: "1px solid #1f2937",
+          borderRadius: 16,
+          padding: 18,
         }}
       >
-        {messages.length === 0 && (
-          <p style={{ color: "#777" }}>
-            Ask a coaching question, pitch explanation, rebuttal, or system overview.
-          </p>
-        )}
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Fundraise Coach (Demo)</h1>
+            <p style={{ marginTop: 6, marginBottom: 0, color: "#9ca3af" }}>
+              Logged in as: <b style={{ color: "#e5e7eb" }}>{email || "(not logged in)"}</b>
+            </p>
+          </div>
 
-        {messages.map((m, i) => (
-          <div key={i} style={{ marginBottom: 16 }}>
-            <div
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              onClick={rebuildKnowledge}
+              disabled={reloading}
+              title="Clears the in-memory RAG cache; next chat message rebuilds embeddings."
               style={{
-                fontWeight: 700,
-                marginBottom: 4,
-                color: m.role === "user" ? "#333" : "#0a5",
+                padding: "10px 12px",
+                borderRadius: 10,
+                fontWeight: 800,
+                border: "1px solid rgba(56,189,248,0.35)", // light blue border
+                background: "rgba(56,189,248,0.10)", // light blue tint
+                color: "#7dd3fc", // sky-ish
+                cursor: reloading ? "not-allowed" : "pointer",
               }}
             >
-              {m.role === "user" ? "You" : "Coach"}
-            </div>
+              {reloading ? "Rebuilding…" : "Rebuild Knowledge"}
+            </button>
 
-            <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
-
-            {m.role === "assistant" && m.sources && m.sources.length > 0 && (
-              <div
-                style={{
-                  marginTop: 8,
-                  padding: 8,
-                  background: "#f7f7f7",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              >
-                <b>Sources used:</b>
-                <ul style={{ marginTop: 4, paddingLeft: 18 }}>
-                  {m.sources.map((s, idx) => (
-                    <li key={idx}>{s}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <button
+              onClick={signOut}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                fontWeight: 800,
+                border: "1px solid rgba(168,85,247,0.35)", // purple border
+                background: "rgba(168,85,247,0.10)", // purple tint
+                color: "#c084fc",
+                cursor: "pointer",
+              }}
+            >
+              Sign out
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Input */}
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          placeholder="Ask Fundraise Coach…"
+        {/* Reload status */}
+        {reloadStatus && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderRadius: 12,
+              border: "1px solid rgba(251,191,36,0.25)", // gold border
+              background: "rgba(251,191,36,0.10)", // gold tint
+              color: "#fbbf24",
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            {reloadStatus}
+          </div>
+        )}
+
+        {/* Chat messages */}
+        <div
           style={{
-            flex: 1,
-            padding: 12,
-            borderRadius: 10,
-            border: "1px solid #ccc",
-          }}
-        />
-        <button
-          onClick={sendMessage}
-          disabled={loading}
-          style={{
-            padding: "0 16px",
-            borderRadius: 10,
-            fontWeight: 700,
+            marginTop: 16,
+            padding: 16,
+            border: "1px solid #1f2937",
+            borderRadius: 14,
+            minHeight: 340,
+            background: "#0b0b0b",
           }}
         >
-          {loading ? "Thinking…" : "Send"}
-        </button>
+          {messages.length === 0 && (
+            <p style={{ color: "#9ca3af", marginTop: 0 }}>
+              Ask a coaching question, pitch explanation, rebuttal, or system overview.
+            </p>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} style={{ marginBottom: 18 }}>
+              <div
+                style={{
+                  fontWeight: 900,
+                  marginBottom: 6,
+                  color: m.role === "user" ? "#93c5fd" : "#a78bfa", // light blue vs purple
+                }}
+              >
+                {m.role === "user" ? "You" : "Coach"}
+              </div>
+
+              <div style={{ whiteSpace: "pre-wrap", color: "#e5e7eb" }}>{m.content}</div>
+
+              {/* Sources (dark mode fix) */}
+              {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: 10,
+                    borderRadius: 12,
+                    border: "1px solid rgba(56,189,248,0.25)",
+                    background: "rgba(56,189,248,0.08)",
+                    color: "#bae6fd",
+                    fontSize: 12,
+                  }}
+                >
+                  <b style={{ color: "#7dd3fc" }}>Sources used:</b>
+                  <ul style={{ marginTop: 6, paddingLeft: 18 }}>
+                    {m.sources.map((s, idx) => (
+                      <li key={idx} style={{ color: "#bae6fd" }}>
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Input */}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            placeholder="Ask Fundraise Coach…"
+            style={{
+              flex: 1,
+              padding: 12,
+              borderRadius: 10,
+              border: "1px solid #1f2937",
+              background: "#0b0b0b",
+              color: "#e5e7eb",
+              outline: "none",
+            }}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={loading}
+            style={{
+              padding: "0 16px",
+              borderRadius: 10,
+              fontWeight: 900,
+              border: "1px solid rgba(59,130,246,0.35)", // blue border
+              background: "rgba(59,130,246,0.12)", // blue tint
+              color: "#93c5fd",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Thinking…" : "Send"}
+          </button>
+        </div>
       </div>
     </main>
   );
