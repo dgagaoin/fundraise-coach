@@ -3,6 +3,7 @@
 // NOTES:
 // - Calls /api/chat for responses (RAG + sources)
 // - Includes "Rebuild Knowledge" button that calls /api/chat/reload (clears in-memory RAG cache)
+// - Includes "Start New Chat" button that clears the current chat session in the UI
 
 "use client";
 
@@ -35,6 +36,15 @@ export default function ChatPage() {
     window.location.href = "/login";
   }
 
+  function startNewChat() {
+    // Clear UI session only (does not affect auth or RAG cache)
+    setMessages([]);
+    setInput("");
+    setLoading(false);
+    // Also clear any status banner so the UI feels fresh
+    setReloadStatus("");
+  }
+
   async function rebuildKnowledge() {
     if (reloading) return;
     setReloading(true);
@@ -44,7 +54,6 @@ export default function ChatPage() {
       const res = await fetch("/api/chat/reload", { method: "POST" });
       const data = await res.json();
       setReloadStatus(data?.message ?? "Knowledge reloaded.");
-      // Clear after a moment so the UI stays clean
       setTimeout(() => setReloadStatus(""), 4000);
     } catch {
       setReloadStatus("Failed to reload knowledge. Check server logs.");
@@ -70,7 +79,12 @@ export default function ChatPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({
+          message: userMessage.content,
+          // Send recent history so follow-ups like "how do I say it?" have context.
+          // Keep it short to avoid token bloat.
+        messages: [...messages, userMessage].slice(-10),
+        }),
       });
 
       const data = await res.json();
@@ -105,7 +119,6 @@ export default function ChatPage() {
         color: "#e5e7eb",
       }}
     >
-      {/* Dark background wrapper */}
       <div
         style={{
           background: "#050505",
@@ -115,15 +128,51 @@ export default function ChatPage() {
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Fundraise Coach (Demo)</h1>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ minWidth: 260 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>
+              Fundraise Coach (Demo)
+            </h1>
             <p style={{ marginTop: 6, marginBottom: 0, color: "#9ca3af" }}>
-              Logged in as: <b style={{ color: "#e5e7eb" }}>{email || "(not logged in)"}</b>
+              Logged in as:{" "}
+              <b style={{ color: "#e5e7eb" }}>{email || "(not logged in)"}</b>
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {/* Buttons */}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              onClick={startNewChat}
+              title="Clears the current chat messages on screen."
+              style={{
+                padding: "10px 12px",
+                borderRadius: 10,
+                fontWeight: 900,
+                border: "1px solid rgba(34,197,94,0.35)", // green border
+                background: "rgba(34,197,94,0.10)", // green tint
+                color: "#86efac",
+                cursor: "pointer",
+              }}
+            >
+              Start New Chat
+            </button>
+
             <button
               onClick={rebuildKnowledge}
               disabled={reloading}
@@ -132,9 +181,9 @@ export default function ChatPage() {
                 padding: "10px 12px",
                 borderRadius: 10,
                 fontWeight: 800,
-                border: "1px solid rgba(56,189,248,0.35)", // light blue border
-                background: "rgba(56,189,248,0.10)", // light blue tint
-                color: "#7dd3fc", // sky-ish
+                border: "1px solid rgba(56,189,248,0.35)",
+                background: "rgba(56,189,248,0.10)",
+                color: "#7dd3fc",
                 cursor: reloading ? "not-allowed" : "pointer",
               }}
             >
@@ -147,8 +196,8 @@ export default function ChatPage() {
                 padding: "10px 12px",
                 borderRadius: 10,
                 fontWeight: 800,
-                border: "1px solid rgba(168,85,247,0.35)", // purple border
-                background: "rgba(168,85,247,0.10)", // purple tint
+                border: "1px solid rgba(168,85,247,0.35)",
+                background: "rgba(168,85,247,0.10)",
                 color: "#c084fc",
                 cursor: "pointer",
               }}
@@ -165,8 +214,8 @@ export default function ChatPage() {
               marginTop: 12,
               padding: 10,
               borderRadius: 12,
-              border: "1px solid rgba(251,191,36,0.25)", // gold border
-              background: "rgba(251,191,36,0.10)", // gold tint
+              border: "1px solid rgba(251,191,36,0.25)",
+              background: "rgba(251,191,36,0.10)",
               color: "#fbbf24",
               fontSize: 13,
               fontWeight: 700,
@@ -199,15 +248,16 @@ export default function ChatPage() {
                 style={{
                   fontWeight: 900,
                   marginBottom: 6,
-                  color: m.role === "user" ? "#93c5fd" : "#a78bfa", // light blue vs purple
+                  color: m.role === "user" ? "#93c5fd" : "#a78bfa",
                 }}
               >
                 {m.role === "user" ? "You" : "Coach"}
               </div>
 
-              <div style={{ whiteSpace: "pre-wrap", color: "#e5e7eb" }}>{m.content}</div>
+              <div style={{ whiteSpace: "pre-wrap", color: "#e5e7eb" }}>
+                {m.content}
+              </div>
 
-              {/* Sources (dark mode fix) */}
               {m.role === "assistant" && m.sources && m.sources.length > 0 && (
                 <div
                   style={{
@@ -258,8 +308,8 @@ export default function ChatPage() {
               padding: "0 16px",
               borderRadius: 10,
               fontWeight: 900,
-              border: "1px solid rgba(59,130,246,0.35)", // blue border
-              background: "rgba(59,130,246,0.12)", // blue tint
+              border: "1px solid rgba(59,130,246,0.35)",
+              background: "rgba(59,130,246,0.12)",
               color: "#93c5fd",
               cursor: loading ? "not-allowed" : "pointer",
             }}
