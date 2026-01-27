@@ -29,6 +29,16 @@ export default function ChatPage() {
 
   const [role, setRole] = useState<CoachRole>("rep");
 
+  const rolePlaceholderMap: Record<CoachRole, string> = {
+  rep:
+    "Ask me about any of our systems, the pitches for any of the charities we represent, how to rebut or AIC potential donors, or for motivational stories.",
+  leader:
+    "Ask me how to explain any of our systems to new field reps, for the USPs to any or all charities, or for stories or quotes you could use for a crew meeting. You can also ask anything a field rep would ask.",
+  owner:
+    "Ask me for ideas for a sales impact, a leaders meeting, or a morning meeting, or how to explain any of our systems to leaders or field reps. You can also ask anything a field rep or leader would ask.",
+};
+
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email ?? "");
@@ -299,10 +309,11 @@ export default function ChatPage() {
           }}
         >
           {messages.length === 0 && (
-            <p style={{ color: "#9ca3af", marginTop: 0 }}>
-              Ask a coaching question, pitch explanation, rebuttal, or system overview.
+            <p style={{ color: "#9ca3af", marginTop: 0, whiteSpace: "pre-wrap" }}>
+            {rolePlaceholderMap[role]}
             </p>
           )}
+
 
           {messages.map((m, i) => (
             <div key={i} style={{ marginBottom: 18 }}>
@@ -352,7 +363,7 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="Ask Fundraise Coach…"
+            placeholder="Type your question here"
             style={{
               flex: 1,
               padding: 12,

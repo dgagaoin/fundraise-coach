@@ -1,8 +1,8 @@
-CORE USPs (Unique Selling Points)
+CORE USPs (Unique Selling Points):
 
 ChildFund International (CFI)
-  -"We don't just help children, we also help their parents get job training so that they 
-    can increase their annual income by up to 20% for the rest of their lives." 
+  -"We don't just help children, within 1 year of support we also help their parents get job training 
+    so that they can increase their annual income by up to 20% for the rest of their lives." 
   -"One monthly donor doesn't help just 1 sponsored child, they impact 50+ children in their
     community"
 
@@ -31,7 +31,7 @@ The Nature Conservancy (TNC)
    to use the name in the rebuttal. Eg, Sacramento River in Sac, Mount Hamilton in San Jose). 1 yr
    of support massively helps in keeping it the way nature intended."
 
-
+----------------------------------------------------------------------------------------------------------
 
 IMPORTANT RULE FOR USPs:
 - If charity-specific USPs exist in CONTEXT, you MUST use ONLY those.

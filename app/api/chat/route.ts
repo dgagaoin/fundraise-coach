@@ -1,7 +1,10 @@
 /*fundraise-coach/app/api/chat/route.ts*/
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { ragSearch } from "./rag";
+import { ragSearch, readKnowledgeDoc } from "./rag";
+import fs from "fs";
+import path from "path";
+
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -37,6 +40,376 @@ function normalizeReply(text: string) {
   return out;
 }
 
+function extractStandardCloseFromContext(text: string) {
+  if (!text) return null;
+
+  const lines = text
+    .replace(/^\uFEFF/, "") // strip UTF-8 BOM if present
+    .split("\n")
+    .map((l) => l.replace(/\r/g, "").replace(/^\uFEFF/, "").trim());
+  
+  const lowerLines = lines.map((l) => l.toLowerCase());
+
+  // Accept multiple real-world headers (your docs may not literally say "STANDARD CLOSE")
+  const startMarkers = ["close:", "close", "standard close", "standard close:"];
+
+
+  const stopMarkers = [
+    "rebuttal usps",
+    "rebuttal usp",
+    "usps",
+    "unique selling",
+    "core rebuttals",
+    "common rebuttals",
+    "problem:",
+    "solution:",
+    "short story",
+    "sources:",
+  ];
+
+  // Find the first line that looks like a close header
+  let startIdx = -1;
+
+  for (let i = 0; i < lowerLines.length; i++) {
+    const l = lowerLines[i];
+    // Exact-ish match: line starts with marker or equals marker
+    if (
+      startMarkers.some((m) => l === m || l.startsWith(m)) ||
+      startMarkers.some((m) => l.replace(/[:\-–—]+$/g, "").trim() === m)
+    ) {
+      startIdx = i;
+      break;
+    }
+  }
+
+  if (startIdx === -1) return null;
+
+  // Collect subsequent lines until stop marker or blank gap
+  const collected: string[] = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+    const ll = lowerLines[i];
+
+    if (!l) {
+      // If we already collected something, a blank line ends the section
+      if (collected.length) break;
+      // If we haven't collected yet, skip leading blanks
+      continue;
+    }
+
+    // Stop if next section begins
+    if (stopMarkers.some((m) => ll.startsWith(m) || ll.includes(m))) break;
+
+    // Skip pure “title-ish” lines
+    if (
+      /^charity\s+short\s+stories/i.test(l) ||
+      /^charity\s+short\s+story/i.test(l) ||
+      /^short\s+stories/i.test(l)
+    ) {
+      continue;
+    }
+
+    collected.push(l);
+
+    // Don't let this run forever; closes are short
+    if (collected.length >= 10) break;
+  }
+
+  const out = collected.join("\n").trim();
+  return out.length ? out : null;
+}
+
+function extractSpokenCloseFromStandardCloseDoc(text: string) {
+  if (!text) return null;
+
+  const cleaned = text.replace(/^\uFEFF/, "").replace(/\r/g, "");
+  const lines = cleaned.split("\n").map((l) => l.trim());
+
+  // Find the "STANDARD CLOSE" section start
+  const startIdx = lines.findIndex((l) => l.toLowerCase() === "standard close");
+  if (startIdx === -1) return null;
+
+  // Stop at the next divider line (----) or end of file
+  const out: string[] = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+
+    if (!l) {
+      // keep at most one blank line
+      if (out.length && out[out.length - 1] !== "") out.push("");
+      continue;
+    }
+
+    // Stop at a divider or the next major header section
+    if (l.startsWith("---")) break;
+    const ll = l.toLowerCase();
+    if (ll.startsWith("core close structure") || ll.startsWith("simple day") || ll.startsWith("key rules")) break;
+
+    out.push(l);
+  }
+
+  const block = out.join("\n").trim();
+  return block.length ? block : null;
+}
+
+function extractCoreCloseStructureBlock(text: string) {
+  if (!text) return null;
+
+  const cleaned = text.replace(/^\uFEFF/, "").replace(/\r/g, "");
+  const lines = cleaned.split("\n").map((l) => l.replace(/\r/g, ""));
+
+  // Find the exact section header
+  const startIdx = lines.findIndex((l) => {
+  const t = l.trim().toLowerCase();
+  return t.includes("core close structure") && t.includes("what to say");
+  });
+
+  if (startIdx === -1) return null;
+
+  const out: string[] = [];
+
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+
+    // Stop ONLY when we hit a divider line
+    const t = l.trim();
+
+  if (t.startsWith("---")) break;
+
+  if (!t) {
+    if (out.length && out[out.length - 1] !== "") out.push("");
+    continue;
+  }
+
+  // Keep the ORIGINAL line (not trimmed) so we don't lose unicode/spacing weirdness
+  out.push(l);
+  }
+
+  const block = out.join("\n").replace(/[ \t]+\n/g, "\n").trim();
+  return block.length ? block : null;
+}
+
+
+
+function appendOneFinalCloseQuestion(fullCloseBlock: string) {
+  const raw = String(fullCloseBlock || "").trim();
+  if (!raw) return raw;
+
+  // Your required teaching close line (verbatim)
+  const optionLine =
+    '"Im sure I can count on your support!" or "Can we count on your support?"';
+
+  // Remove any existing quoted-options line so we can re-add it cleanly at the end
+  const withoutOldOption = raw
+    .split("\n")
+    .filter((l) => !/^".+"\s+or\s+".+"$/i.test(l.trim()))
+    .join("\n")
+    .trim();
+
+  // Always end with the teaching option line
+  return `${withoutOldOption}\n\n${optionLine}`;
+}
+
+
+
+function pickOneCloseLine(closeText: string) {
+  const raw = String(closeText || "").trim();
+  if (!raw) return raw;
+
+  // Split by newlines and also handle " or " in the same line
+  const parts = raw
+    .split("\n")
+    .flatMap((l) => l.split(/\s+or\s+/i))
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return raw;
+
+  // Prefer the question form
+  const question = parts.find((p) => p.includes("?"));
+  if (question) return question;
+
+  // Otherwise choose the shortest/cleanest option
+  parts.sort((a, b) => a.length - b.length);
+  return parts[0];
+}
+
+function parseCoreUspsByCharity(coreUspDoc: string) {
+  const text = String(coreUspDoc || "").replace(/^\uFEFF/, "").replace(/\r/g, "");
+  const lines = text.split("\n");
+
+  const sections: Record<string, string[]> = {
+    "ChildFund International (CFI)": [],
+    "CARE": [],
+    "Save the Children (STC)": [],
+    "IFAW (International Fund for Animal Welfare)": [],
+    "The Nature Conservancy (TNC)": [],
+  };
+
+  let current: keyof typeof sections | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) continue;
+    if (line.startsWith("---")) break; // stop at divider
+    if (line.toLowerCase().startsWith("important rule")) break;
+
+    // Detect section headers
+    if (/^childfund/i.test(line) || /\(cfi\)/i.test(line)) {
+      current = "ChildFund International (CFI)";
+      continue;
+    }
+    if (/^care\b/i.test(line)) {
+      current = "CARE";
+      continue;
+    }
+    if (/^save the children/i.test(line) || /\(stc\)/i.test(line)) {
+      current = "Save the Children (STC)";
+      continue;
+    }
+    if (/^ifaw/i.test(line)) {
+      current = "IFAW (International Fund for Animal Welfare)";
+      continue;
+    }
+    if (/^the nature conservancy/i.test(line) || /\(tnc\)/i.test(line)) {
+      current = "The Nature Conservancy (TNC)";
+      continue;
+    }
+
+    if (!current) continue;
+
+    // Capture bullets (handles -"..." and normal - bullets)
+    if (line.startsWith("-") || line.startsWith('-"') || line.startsWith("–") || line.startsWith("•")) {
+      sections[current].push(line.replace(/^[-–•]\s?/, "").trim());
+      continue;
+    }
+
+    // Continuation lines (indented wrap) append to last bullet
+    if (sections[current].length) {
+      sections[current][sections[current].length - 1] += " " + line;
+    }
+  }
+
+  return sections;
+}
+
+function formatUspsByCharity(sections: Record<string, string[]>) {
+  const order = [
+    "ChildFund International (CFI)",
+    "Save the Children (STC)",
+    "CARE",
+    "IFAW (International Fund for Animal Welfare)",
+    "The Nature Conservancy (TNC)",
+  ];
+
+  const out: string[] = [];
+  for (const key of order) {
+    out.push(`${key}:`);
+    const bullets = sections[key] || [];
+    if (!bullets.length) {
+      out.push("- Missing charity-specific USPs in training materials.");
+    } else {
+      for (const b of bullets) out.push(`- ${b}`);
+    }
+    out.push(""); // blank line between charities
+  }
+
+  return out.join("\n").trim();
+}
+
+function extractRebuttalSection(coreDoc: string, key: string) {
+  const text = String(coreDoc || "").replace(/^\uFEFF/, "").replace(/\r/g, "");
+  const lines = text.split("\n");
+
+  // section headers in your doc look like:
+  // "Online Rebuttal ("Can I just do this online?")"
+  // We'll match by prefix.
+  const targetPrefix = key.toLowerCase();
+
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim().toLowerCase();
+    if (l.startsWith(targetPrefix.toLowerCase())) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return null;
+
+  const out: string[] = [];
+  for (let i = start; i < lines.length; i++) {
+    const raw = lines[i].replace(/\r/g, "");
+    const t = raw.trim();
+
+    // stop at next divider line
+    if (i !== start && t.startsWith("---")) break;
+
+    out.push(raw);
+  }
+
+  const block = out.join("\n").trim();
+  return block.length ? block : null;
+}
+
+
+function enforcePitchClose(replyText: string, pinnedClose: string) {
+  const text = String(replyText ?? "");
+  const closeBlock = `CLOSE:\n${String(pinnedClose ?? "").trim()}\n`;
+
+  const labels = ["PROBLEM:", "SOLUTION:", "CLOSE:", "REBUTTAL USPs:"];
+
+  const lower = text.toLowerCase();
+
+  function findLabelIndex(label: string) {
+    const l = label.toLowerCase();
+    // Prefer newline-boundary match, fallback to start-of-string match
+    const idxNewline = lower.indexOf("\n" + l);
+    if (idxNewline !== -1) return idxNewline + 1; // points to label start
+    if (lower.startsWith(l)) return 0;
+    return -1;
+  }
+
+  // Collect found labels + positions
+  const found = labels
+    .map((lab) => ({ lab, idx: findLabelIndex(lab) }))
+    .filter((x) => x.idx >= 0)
+    .sort((a, b) => a.idx - b.idx);
+
+  const idxClose = findLabelIndex("CLOSE:");
+  const idxSolution = findLabelIndex("SOLUTION:");
+
+  // Helper: find end index of a section = next label start or end of text
+  function sectionEnd(startIdx: number) {
+    const next = found.find((x) => x.idx > startIdx);
+    return next ? next.idx : text.length;
+  }
+
+  // Case 1: CLOSE exists → replace its contents, preserve everything else
+  if (idxClose >= 0) {
+    const end = sectionEnd(idxClose);
+    const before = text.slice(0, idxClose);
+    const after = text.slice(end);
+    // Ensure spacing between CLOSE and next section
+    const spacer = after.startsWith("\n") ? "\n" : "\n\n";
+    return `${before}${closeBlock}${spacer}${after.trimStart()}`;
+  }
+
+  // Case 2: No CLOSE → insert it after SOLUTION section if possible
+  if (idxSolution >= 0) {
+    const end = sectionEnd(idxSolution);
+    const before = text.slice(0, end).trimEnd();
+    const after = text.slice(end).trimStart();
+    const spacerAfter = after.length ? "\n\n" : "";
+    return `${before}\n\n${closeBlock}${spacerAfter}${after}`;
+  }
+
+  // Case 3: Fallback → append CLOSE at end
+  return `${text.trimEnd()}\n\n${closeBlock}`;
+}
+
+
+
 function toTranscript(msgs: ClientMsg[]) {
   return msgs
     .slice(-10)
@@ -54,6 +427,69 @@ function isPitchRequest(message: string) {
     m.includes("door pitch")
   );
 }
+
+/* --- USP ALL-CHARITIES MODE DETECTION --- */
+function isAllCharitiesUSPRequest(message: string) {
+  const m = message.toLowerCase();
+  // high precision: user is explicitly asking for ALL charities USPs
+  return (
+    (m.includes("usp") || m.includes("unique selling")) &&
+    (m.includes("all charities") || m.includes("every charity") || m.includes("each charity") || m.includes("all campaigns"))
+  );
+}
+
+function isAllCharitiesRebuttalUSPRequest(message: string) {
+  const m = message.toLowerCase();
+  // explicit "rebuttal usps for all charities"
+  return (
+    (m.includes("rebuttal") && (m.includes("usp") || m.includes("unique selling"))) &&
+    (m.includes("all charities") || m.includes("every charity") || m.includes("each charity") || m.includes("all campaigns"))
+  );
+}
+
+function isCoreUspListRequest(message: string) {
+  const m = message.toLowerCase();
+
+  // user intent to list core/rebuttal usps
+  const wantsUsps =
+    m.includes("usp") ||
+    m.includes("usps") ||
+    m.includes("unique selling");
+
+  const wantsCore =
+    m.includes("core") ||
+    m.includes("all") ||
+    m.includes("rebuttal");
+
+  // if they specify a charity, do NOT trigger this (let normal logic run)
+  const mentionsSpecificCharity =
+    m.includes("cfi") ||
+    m.includes("childfund") ||
+    m.includes("save the children") ||
+    m.includes("stc") ||
+    m.includes("care") ||
+    m.includes("ifaw") ||
+    m.includes("nature conservancy") ||
+    m.includes("tnc");
+
+  return wantsUsps && wantsCore && !mentionsSpecificCharity;
+}
+
+function detectRebuttalKey(message: string) {
+  const m = message.toLowerCase();
+
+  // map user intent to canonical section titles in the Core Rebuttals doc
+  if (m.includes("one time") || m.includes("one-time") || m.includes("cash rebuttal")) return "One Time Rebuttal";
+  if (m.includes("online rebuttal") || (m.includes("online") && m.includes("rebuttal"))) return "Online Rebuttal";
+  if (m.includes("security rebuttal") || m.includes("security") || m.includes("details") || m.includes("information")) return "Security Rebuttal";
+  if (m.includes("do enough") || m.includes("donate to other") || (m.includes("other charities") && m.includes("donate"))) return "Do Enough Rebuttal";
+  if (m.includes("research rebuttal") || (m.includes("research") && m.includes("rebuttal"))) return "Research Rebuttal";
+  if (m.includes("spouse rebuttal") || m.includes("talk to my spouse") || m.includes("my spouse")) return "Spouse Rebuttal";
+  if (m.includes("corporate match") || m.includes("matching") || m.includes("employer matches")) return "Corporate Match Rebuttal";
+
+  return null;
+}
+
 
 function isLongPitchRequest(message: string) {
   const m = message.toLowerCase();
@@ -202,6 +638,54 @@ function isKPIRequest(message: string) {
 }
 
 /**
+ * COACH MODE detection (high precision):
+ * Triggered when leaders/owners ask how to coach, teach, explain, drill, or correct reps.
+ * This should NOT steal pitch/AIC/KPI/USP modes (we gate it later).
+ */
+function isCoachRequest(message: string) {
+  const m = message.toLowerCase();
+
+  // Strong coaching intent verbs / phrases
+  const intent =
+    m.includes("how do i coach") ||
+    m.includes("how do i train") ||
+    m.includes("how do i teach") ||
+    m.includes("how do i explain") ||
+    m.includes("how should i explain") ||
+    m.includes("help me coach") ||
+    m.includes("help me train") ||
+    m.includes("help me teach") ||
+    m.includes("help my team") ||
+    m.includes("help my rep") ||
+    m.includes("coach my") ||
+    m.includes("train my") ||
+    m.includes("teach my") ||
+    m.includes("drill") ||
+    m.includes("roleplay") ||
+    m.includes("role play") ||
+    m.includes("correction") ||
+    m.includes("correct them") ||
+    m.includes("what do i listen for") ||
+    m.includes("what should i look for") ||
+    m.includes("what should i say to my rep");
+
+  // Reduce false positives: if they explicitly want a pitch/script for donors, it's not coach mode.
+  const donorScript =
+    m.includes("door pitch") ||
+    m.includes("elevator pitch") ||
+    (m.includes("pitch") && !m.includes("explain")) ||
+    (m.includes("script") &&
+      !m.includes("script i say to my rep") &&
+      !m.includes("example"));
+
+
+  if (donorScript) return false;
+
+  return intent;
+}
+
+
+/**
  * KPI coaching spec: deterministic rules + output format.
  * IMPORTANT: This spec must NOT conflict with pitch/AIC rules.
  */
@@ -313,7 +797,116 @@ function kpiCoachingSpec() {
   );
 }
 
+type RebuttalFileKey =
+  | "Online Rebuttal.txt"
+  | "Security Rebuttal.txt"
+  | "Research Rebuttal.txt"
+  | "Spouse Rebuttal.txt"
+  | "Corporate Match.txt"
+  | "One Time Cash Rebuttal.txt"
+  | "Do Enough or Donate to Other Charities.txt"
+  | null;
 
+function detectRebuttalFile(message: string): RebuttalFileKey {
+  const m = message.toLowerCase();
+
+  // Require rebuttal intent so keywords alone don't misfire
+  const hasRebuttalIntent = m.includes("rebuttal") || m.includes("objection");
+  if (!hasRebuttalIntent) return null;
+
+  if (m.includes("online")) return "Online Rebuttal.txt";
+  if (m.includes("security") || m.includes("details") || m.includes("information"))
+    return "Security Rebuttal.txt";
+  if (m.includes("research")) return "Research Rebuttal.txt";
+  if (m.includes("spouse") || m.includes("wife") || m.includes("husband"))
+    return "Spouse Rebuttal.txt";
+  if (m.includes("corporate") || m.includes("match"))
+    return "Corporate Match.txt";
+  if (m.includes("one time") || m.includes("one-time") || m.includes("cash"))
+    return "One Time Cash Rebuttal.txt";
+  if (
+    m.includes("do enough") ||
+    m.includes("donate to other") ||
+    m.includes("other charities")
+  ) {
+    return "Do Enough or Donate to Other Charities.txt";
+  }
+
+  return null;
+}
+
+function isRebuttalRequest(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("rebuttal") || m.includes("objection");
+}
+
+function getCoreUspsForCharity(coreUspDoc: string, charity: string): string[] {
+  const lines = coreUspDoc
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const results: string[] = [];
+  let capture = false;
+
+  for (const line of lines) {
+    // Header match (e.g. "CARE:", "IFAW:", etc.)
+    if (line.toLowerCase().startsWith(charity.toLowerCase() + ":")) {
+      capture = true;
+      continue;
+    }
+
+    // Stop when we hit another section header
+    if (capture && line.endsWith(":")) break;
+
+    if (capture) {
+      results.push(line.replace(/^[-•]/, "").trim());
+    }
+  }
+
+  return results;
+}
+
+function isMorningMeetingRequest(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("morning meeting") || m.includes("crew meeting");
+}
+
+function isLeadersMeetingRequest(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("leaders meeting") || m.includes("leadership meeting");
+}
+
+function isSalesImpactRequest(message: string) {
+  const m = message.toLowerCase();
+  return m.includes("sales impact");
+}
+
+function listTxtFilesUnderKnowledge(relDir: string) {
+  const root = path.join(process.cwd(), "knowledge");
+  const dir = path.join(root, relDir);
+
+  if (!fs.existsSync(dir)) return [];
+
+  const out: string[] = [];
+  const walk = (abs: string, baseRel: string) => {
+    const entries = fs.readdirSync(abs, { withFileTypes: true });
+    for (const ent of entries) {
+      const full = path.join(abs, ent.name);
+      const rel = path.join(baseRel, ent.name).replaceAll("\\", "/");
+      if (ent.isDirectory()) walk(full, rel);
+      else if (ent.isFile() && ent.name.toLowerCase().endsWith(".txt")) out.push(rel);
+    }
+  };
+
+  walk(dir, relDir);
+  return out;
+}
+
+function pickOne<T>(arr: T[]) {
+  if (!arr.length) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 
 export async function POST(req: Request) {
@@ -330,17 +923,159 @@ export async function POST(req: Request) {
 
     const charity = detectCharity(message);
 
+    // USP aggregate modes (must run before other modes)
+    const uspAllMode = isAllCharitiesUSPRequest(message);
+    const rebuttalUspAllMode = isAllCharitiesRebuttalUSPRequest(message);
+
     // KPI mode (must be checked early)
     const kpiMode = isKPIRequest(message);
 
+    // Coach Mode (structured coaching help for leaders/owners)
+    const coachMode =
+      (role === "leader" || role === "owner") &&
+      !uspAllMode &&
+      !rebuttalUspAllMode &&
+      !kpiMode &&
+      isCoachRequest(message);
+
+
     // AIC must be detected BEFORE pitchMode, because the word "pitch" appears in AIC questions.
-    const aicMode = !kpiMode && isAICRequest(message);
+    const aicMode = !kpiMode && !uspAllMode && !rebuttalUspAllMode && isAICRequest(message);
     const aicExplainMode = aicMode && isAICExplainRequest(message);
     const aicScriptMode = aicMode && !aicExplainMode;
 
     // If AIC is active, we do NOT want pitchMode to trigger.
-    const pitchMode = !kpiMode && !aicMode && isPitchRequest(message);
+    const pitchMode = !kpiMode && !uspAllMode && !rebuttalUspAllMode && !aicMode && isPitchRequest(message);
     const longPitchMode = pitchMode && isLongPitchRequest(message);
+
+        // ---- Deterministic Meeting Modes (quick v1) ----
+
+    // 1) Morning Meeting = pull a random story from knowledge/motivation_stories
+    if (isMorningMeetingRequest(message)) {
+      const files = listTxtFilesUnderKnowledge("motivation_stories");
+      const picked = pickOne(files);
+
+      if (!picked) {
+        return NextResponse.json({
+          reply: "No motivation stories found in knowledge/motivation_stories.",
+          sources: [],
+          meta: { role, mode: "MORNING MEETING (Deterministic)" },
+        });
+      }
+
+      const story = await readKnowledgeDoc(picked);
+
+      return NextResponse.json({
+        reply:
+          "MORNING MEETING STORY:\n" +
+          (story?.trim() || "(Story file was empty)") +
+          "\n\nFOLLOW-UP QUESTION (ask the crew):\n" +
+          "What does this mean for how we show up today — with our energy, our consistency, and our standards?",
+        sources: [picked],
+        meta: { role, mode: "MORNING MEETING (Deterministic)", picked },
+      });
+    }
+
+    // 2) Leaders Meeting = pull coaching docs (sample a few) and let model build an agenda
+    if (isLeadersMeetingRequest(message)) {
+      const files = listTxtFilesUnderKnowledge("coaching");
+      const sample = files.slice(0, 6); // quick v1: first 6 files
+
+      const chunks: string[] = [];
+      for (const f of sample) {
+        const txt = await readKnowledgeDoc(f);
+        if (txt?.trim()) chunks.push(`SOURCE: ${f}\n${txt.trim()}`);
+      }
+
+      return NextResponse.json({
+        reply:
+          "LEADERS MEETING MODE (v1):\n" +
+          "Ask a specific leadership topic (ex: coaching low presentations, accountability, confidence, recruiting, retention), or say: 'Build me a leaders meeting agenda.'\n\n" +
+          "Loaded coaching sources:\n" +
+          sample.map((s) => `- ${s}`).join("\n"),
+        sources: sample,
+        meta: { role, mode: "LEADERS MEETING (Deterministic)", loaded: sample.length },
+      });
+    }
+
+    // 3) Sales Impact = treat as sales systems (systems docs) and let model craft a 5–10 min teaching
+    if (isSalesImpactRequest(message)) {
+      const files = listTxtFilesUnderKnowledge("systems");
+      const sample = files.slice(0, 8); // quick v1: first 8 files
+
+      return NextResponse.json({
+        reply:
+          "SALES IMPACT MODE (v1):\n" +
+          "Tell me which system to teach (ex: ISH/Intro, Short Story, AIC, Rebuttals, Close, KPI framework), or say: 'Give me a full sales impact for today.'\n\n" +
+          "Loaded systems sources:\n" +
+          sample.map((s) => `- ${s}`).join("\n"),
+        sources: sample,
+        meta: { role, mode: "SALES IMPACT (Deterministic)", loaded: sample.length },
+      });
+    }
+
+
+    // Deterministic: list Core/Rebuttal USPs (all, complete) without model summarization
+    const coreUspListMode = isCoreUspListRequest(message);
+
+      if (coreUspListMode) {
+      const coreDoc = await readKnowledgeDoc("rebuttals/Core USPs.txt");
+      if (!coreDoc) {
+        return NextResponse.json({
+          reply: "Core USPs doc is missing from training materials: rebuttals/Core USPs.txt",
+          sources: [],
+          meta: { role, coreUspListMode: true },
+        });
+      }
+
+      const sections = parseCoreUspsByCharity(coreDoc);
+      const reply = formatUspsByCharity(sections);
+
+      return NextResponse.json({
+        reply,
+        sources: ["rebuttals/Core USPs.txt"],
+        meta: { role, coreUspListMode: true },
+      });
+    }
+
+
+    // Deterministic: load rebuttal file verbatim (prevents mixing & wrong rebuttals)
+    const rebuttalFile = detectRebuttalFile(message);
+    console.log("[REBUTTAL FILE MODE]", { rebuttalFile, message });
+
+
+    if (rebuttalFile && isRebuttalRequest(message)) {
+      const rebuttalDoc = await readKnowledgeDoc(`rebuttals/${rebuttalFile}`);
+      if (!rebuttalDoc) {
+        return NextResponse.json({
+          reply: `Rebuttal file missing from training materials: rebuttals/${rebuttalFile}`,
+          sources: [],
+          meta: { role, mode: "REBUTTAL FILE (Deterministic)", rebuttalFile },
+        });
+      }
+
+      // Optional: if user specifies a charity, append the USPs to plug into Re-Impulse
+      const charityForUsps = detectCharity(message);
+
+      let reply = rebuttalDoc.trim();
+
+      if (charityForUsps) {
+        const coreUspDoc = await readKnowledgeDoc("rebuttals/Core USPs.txt");
+        const usps = coreUspDoc ? getCoreUspsForCharity(coreUspDoc, charityForUsps) : [];
+
+        reply +=
+          "\n\nUSPs to plug into Re-Impulse (use these exactly; do not invent):\n" +
+          (usps.length ? usps.map((u) => `- ${u}`).join("\n") : "- Missing charity-specific USPs in training materials.");
+      }
+
+      return NextResponse.json({
+        reply,
+        sources: [`rebuttals/${rebuttalFile}`].concat(charityForUsps ? ["rebuttals/Core USPs.txt"] : []),
+        meta: { role, mode: "REBUTTAL FILE (Deterministic)", rebuttalFile, charityDetected: charityForUsps },
+      });
+    }
+  
+
 
     // --------- RAG QUERY (ONE SINGLE CALL) ----------
     // Default: use the user's message, plus charity hints if present.
@@ -370,7 +1105,53 @@ export async function POST(req: Request) {
       : "";
 
     // Important: We keep ONE ragSearch call. We just add hints.
-    const { context, usedSources } = await ragSearch(baseQuery + rebuttalHint + aicHint + kpiHint);
+    const ragTopK = (uspAllMode || rebuttalUspAllMode) ? 22 : 6;
+    const { context, usedSources } = await ragSearch(
+      baseQuery + rebuttalHint + aicHint + kpiHint,
+    { topK: ragTopK }
+    );
+
+    // If we are generating a pitch, we MUST pin the Standard Close from context (verbatim).
+        // If we are generating a pitch, we MUST pin the Standard Close from the *actual* Standard Close doc (verbatim).
+    let pinnedStandardClose: string | null = null;
+
+    if (pitchMode) {
+            // Canonical Standard Close lives in core/standard-close.txt
+      const closeDoc = await readKnowledgeDoc("core/standard-close.txt");
+
+      // Extract close lines from that canonical doc
+      const extracted = closeDoc ? extractCoreCloseStructureBlock(closeDoc) : null;
+      console.log("[PINNED CLOSE extracted]\n" + extracted);
+      pinnedStandardClose = extracted ? appendOneFinalCloseQuestion(extracted) : null;
+      console.log("[PINNED CLOSE final]\n" + pinnedStandardClose);
+
+
+      if (!pinnedStandardClose) {
+        return NextResponse.json({
+          reply:
+           "Missing STANDARD CLOSE. Please add the canonical close doc at: knowledge/core/standard-close.txt " +
+           "and include a clear header like 'CLOSE:' followed by the exact close lines.",
+          sources: usedSources,
+          meta: {
+            role,
+            coachMode,
+            kpiMode,
+            pitchMode,
+            longPitchMode,
+            aicMode,
+            charityDetected: charity,
+            uspAllMode,
+            rebuttalUspAllMode,
+            historyIncluded: messages.length > 0,
+            // debug:
+            closeSourceTried: "core/standard-close.txt",
+            closeDocLoaded: Boolean(closeDoc),
+          },
+        });
+      }
+
+    }
+
     // -----------------------------------------------
 
     const systemBase =
@@ -412,7 +1193,7 @@ export async function POST(req: Request) {
       "CLOSE:\n" +
       "- Use ONLY the STANDARD CLOSE language exactly as written in training materials.\n" +
       "- Do NOT paraphrase the close.\n" +
-      "- Do NOT say phrases like 'count on your support', 'commit for a year', or similar.\n" +
+      "- Do NOT say phrases like 'commit for a year', or similar.\n" +
       "- If the standard close is not found in CONTEXT, say exactly which file is missing.\n\n" +
       "REBUTTAL USPs:\n" +
       "- Bullet only.\n" +
@@ -421,6 +1202,41 @@ export async function POST(req: Request) {
       "- If the charity-specific USPs are not found in CONTEXT, say: 'Missing charity-specific USPs in training materials' and name the file to add.\n\n" +
       "If a charity is named, you MUST use the charity's short story lines from the CONTEXT and NOT paraphrase them. " +
       "If the charity short story is missing from context, say exactly which file to add.";
+    
+    const uspAllCharitiesSpec =
+    "The user is asking for USPs for ALL charities.\n" +
+    "You MUST output a charity-by-charity list using ONLY what appears in CONTEXT.\n" +
+    "Do NOT invent, infer, generalize, or combine USPs.\n\n" +
+    "OUTPUT FORMAT (plain text, no markdown):\n" +
+    "CFI (ChildFund International):\n" +
+    "- (bullets)\n" +
+    "STC (Save the Children):\n" +
+    "- (bullets)\n" +
+    "CARE:\n" +
+    "- (bullets)\n" +
+    "IFAW:\n" +
+    "- (bullets)\n" +
+    "TNC (The Nature Conservancy):\n" +
+    "- (bullets)\n\n" +
+    "RULES:\n" +
+    "- Prefer charity-specific USPs if present in CONTEXT.\n" +
+    "- If charity-specific USPs for a charity are NOT present in CONTEXT, you may fall back to CORE USPs ONLY if they are explicitly labeled as applicable.\n" +
+    "- If neither charity-specific nor applicable CORE USPs are present for that charity, say exactly: 'Missing charity-specific USPs in training materials.'\n";
+
+    const rebuttalUspAllCharitiesSpec =
+    "The user is asking for rebuttal USPs for ALL charities.\n" +
+    "You MUST output a charity-by-charity list using ONLY what appears in CONTEXT.\n" +
+    "Do NOT invent.\n\n" +
+    "OUTPUT FORMAT (plain text, no markdown):\n" +
+    "CFI:\n- (bullets)\n" +
+    "STC:\n- (bullets)\n" +
+    "CARE:\n- (bullets)\n" +
+    "IFAW:\n- (bullets)\n" +
+    "TNC:\n- (bullets)\n\n" +
+    "RULES:\n" +
+    "- Use charity-specific rebuttal USPs if present.\n" +
+    "- If missing for a charity, say exactly: 'Missing charity-specific USPs in training materials.'\n";
+  
 
     const pitchSpecLong =
       "The user wants a longer version, but still follow OUR FIELD FORMAT EXACTLY.\n" +
@@ -455,18 +1271,63 @@ export async function POST(req: Request) {
       "- Dollar amount must be exactly: '$1 a day for as long as you can.'\n" +
       "- Method must be exactly: 'It’s a quick 2-minute online charity form, and it’s ongoing.'\n" +
       "- Close must be quoted from the STANDARD CLOSE lines in CONTEXT. Do NOT paraphrase.\n";
+        
+    const coachSpec =
+      "COACH MODE (Structured).\n" +
+      "You are coaching a leader/owner on how to teach or correct a field rep.\n" +
+      "Use the provided CONTEXT only. Be practical, direct, and field-usable.\n" +
+      "Do not use markdown. Plain text only.\n\n" +
+      "OUTPUT FORMAT (use EXACTLY these sections, in this exact order):\n" +
+      "COACHING GOAL:\n" +
+      "- 1–2 lines: what we are improving or fixing.\n\n" +
+      "HOW TO EXPLAIN IT (Say it like this):\n" +
+      "- Give word-for-word leader language (4–8 short lines).\n\n" +
+      "WHY THIS MATTERS:\n" +
+      "- 2–4 short bullets: cause → effect (no hype).\n\n" +
+      "WHAT TO LISTEN FOR:\n" +
+      "- 3–6 bullets: signals the rep understands vs is confused.\n\n" +
+      "COMMON MISTAKE:\n" +
+      "- 1–3 bullets: the usual misinterpretation.\n\n" +
+      "CORRECTIVE DRILL:\n" +
+      "- 1–2 drills only.\n" +
+      "- Each drill must be concrete: setup + reps + success criteria.\n\n" +
+      "OPTIONAL DONOR SCRIPT EXAMPLE (ONLY if helpful):\n" +
+      "- This section is OPTIONAL.\n" +
+      "- Include ONLY if the leader explicitly asks for an example of what a rep might say.\n" +
+      "- Label it clearly as: 'Donor Script Example (for training only)'.\n" +
+      "- Keep it short (3–6 lines).\n" +
+      "- This is NOT a pitch request; it is a teaching example.\n\n" +
+      "RULES:\n" +
+      "- Coaching explanations always come first.\n" +
+      "- Donor-facing language is allowed ONLY as a labeled example for teaching.\n" +
+      "- Never confuse coaching explanation with donor pitch delivery.\n" +
+      "- If the answer is not in CONTEXT, say: 'This is not in the training materials yet.' and name what doc to add.\n" +
+      "- Keep it short. Do not ramble.\n";
+
 
     const kpiSpec = kpiCoachingSpec();
 
-    const systemContent = kpiMode
+    const systemContent = uspAllMode
+      ? `${systemWithRole}\n\n${uspAllCharitiesSpec}`
+      : rebuttalUspAllMode
+      ? `${systemWithRole}\n\n${rebuttalUspAllCharitiesSpec}`
+      : kpiMode
       ? `${systemWithRole}\n\n${kpiSpec}`
+      : coachMode
+      ? `${systemWithRole}\n\n${coachSpec}`
       : aicExplainMode
       ? `${systemWithRole}\n\n${aicExplainSpec}`
       : aicScriptMode
       ? `${systemWithRole}\n\n${aicScriptSpec}`
       : pitchMode
-      ? `${systemWithRole}\n\n${longPitchMode ? pitchSpecLong : pitchSpecShort}`
+      ? `${systemWithRole}\n\n${
+          (longPitchMode ? pitchSpecLong : pitchSpecShort) +
+          "\n\nSPOKEN CLOSE TO USE EXACTLY (copy verbatim, do not paraphrase):\n" +
+          pinnedStandardClose
+        }`
       : systemWithRole;
+
+
 
     const recentTranscript = messages.length ? toTranscript(messages) : "";
 
@@ -483,25 +1344,35 @@ export async function POST(req: Request) {
             `CONTEXT (training materials):\n${context}`,
         },
       ],
-      temperature: 0.25,
+            temperature: pitchMode ? 0.1 : 0.25,
     });
 
     const rawReply = completion.choices[0].message.content ?? "";
-    const reply = normalizeReply(rawReply);
+
+    let replyText = normalizeReply(rawReply);
+
+    // Hard-enforce Standard Close for pitch mode (guaranteed verbatim compliance)
+    if (pitchMode && pinnedStandardClose) {
+      replyText = enforcePitchClose(replyText, pinnedStandardClose);
+    }
 
     return NextResponse.json({
-      reply,
-      sources: usedSources,
+      reply: replyText,
+      sources: pitchMode ? Array.from(new Set([...usedSources, "core/standard-close.txt"])) : usedSources,
       meta: {
         role,
+        coachMode,
         kpiMode,
         pitchMode,
         longPitchMode,
         aicMode,
         charityDetected: charity,
+        uspAllMode,
+        rebuttalUspAllMode,
         historyIncluded: messages.length > 0,
       },
     });
+
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? "Unknown error" }, { status: 500 });
   }

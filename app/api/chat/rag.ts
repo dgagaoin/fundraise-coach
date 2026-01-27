@@ -1,6 +1,4 @@
 /*fundraise-coach/app/api/chat/rag.ts */
-
-
 import fs from "fs";
 import path from "path";
 import OpenAI from "openai";
@@ -106,8 +104,7 @@ function keywordScore(query: string, chunkText: string, chunkSource: string): nu
   const qLower = query.toLowerCase().trim();
   let phraseBoost = 0;
   if (qLower.length >= 6 && qLower.length <= 60) {
-    if (hay.includes(qLower)) phraseBoost = 3; // strong boost if exact phrase appears
-    // Also handle "online rebuttal" even if user includes "the"
+    if (hay.includes(qLower)) phraseBoost = 3;
     const normalizedPhrase = qLower.replace(/\bthe\b/g, "").replace(/\s+/g, " ").trim();
     if (normalizedPhrase && normalizedPhrase.length >= 6 && hay.includes(normalizedPhrase)) {
       phraseBoost = Math.max(phraseBoost, 2);
@@ -145,7 +142,11 @@ export async function buildRagCache(): Promise<RagCache> {
   return global.__fundraiseCoachRagCache;
 }
 
-export async function ragSearch(query: string) {
+type RagSearchOptions = {
+  topK?: number; // default 6
+};
+
+export async function ragSearch(query: string, opts: RagSearchOptions = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
@@ -158,9 +159,8 @@ export async function ragSearch(query: string) {
 
   const qEmbed = await embedText(client, query);
 
-  // Score all chunks with hybrid scoring:
-  // - cosine similarity for semantics
-  // - keyword/phrase scoring for “section lookup” reliability
+  const topK = Math.max(1, Math.min(30, Number(opts.topK ?? 6))); // clamp to 1..30
+
   const scored = cache.chunks
     .map((c) => {
       const cos = cosineSimilarity(qEmbed, c.embedding);
@@ -172,9 +172,8 @@ export async function ragSearch(query: string) {
       return { c, score: combined, cos, key };
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6); // was 4
+    .slice(0, topK);
 
-  // De-dupe sources
   const usedSources = Array.from(new Set(scored.map((s) => s.c.source)));
 
   const context = scored
@@ -183,3 +182,23 @@ export async function ragSearch(query: string) {
 
   return { context, usedSources };
 }
+
+export async function readKnowledgeDoc(sourceName: string): Promise<string | null> {
+  try {
+    const knowledgeRoot = getKnowledgeRoot();
+
+    // Normalize path separators and prevent path traversal
+    const safeRel = String(sourceName || "")
+      .replaceAll("\\", "/")
+      .replace(/^\/+/, "")
+      .replace(/\.\./g, "");
+
+    const fullPath = path.join(knowledgeRoot, safeRel);
+
+    if (!fs.existsSync(fullPath)) return null;
+    return fs.readFileSync(fullPath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
