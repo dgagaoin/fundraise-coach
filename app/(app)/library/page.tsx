@@ -226,27 +226,49 @@ export default function LibraryPage() {
             </div>
           )}
 
-          {/* VIEWER (Mobile drawer below list) */}
-          {isMobile && openPath && (
-            <div
-              ref={viewerRef}
-              style={{
-                border: "1px solid rgba(56,189,248,0.25)",
-                background: "rgba(56,189,248,0.06)",
-                borderRadius: 14,
-                padding: 14,
-              }}
-            >
-              <Viewer
-                openPath={openPath}
-                openContent={openContent}
-                openLoading={openLoading}
-                openError={openError}
-                closeViewer={closeViewer}
-                mobile
-              />
-            </div>
-          )}
+          {/* VIEWER (Mobile modal overlay) */}
+              {isMobile && openPath && (
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 9999,
+                    background: "rgba(0,0,0,0.72)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 14,
+                  }}
+                  onClick={closeViewer}
+                >
+                  <div
+                    ref={viewerRef}
+                    style={{
+                      width: "100%",
+                      maxWidth: 720,
+                      maxHeight: "85vh",
+                      overflow: "auto",
+                      border: "1px solid rgba(56,189,248,0.30)",
+                      background: "rgba(11,11,11,0.98)",
+                      borderRadius: 16,
+                      padding: 14,
+                      boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+                    }}
+                    onClick={(e) => e.stopPropagation()} // prevents closing when tapping inside
+                  >
+                    <Viewer
+                      openPath={openPath}
+                      openContent={openContent}
+                      openLoading={openLoading}
+                      openError={openError}
+                      closeViewer={closeViewer}
+                      mobile
+                      modal
+                    />
+                  </div>
+                </div>
+              )}
+
         </div>
       )}
 
@@ -279,8 +301,10 @@ function Viewer(props: {
   openError: string;
   closeViewer: () => void;
   mobile?: boolean;
+  modal?: boolean;
 }) {
-  const { openPath, openContent, openLoading, openError, closeViewer, mobile } = props;
+
+  const { openPath, openContent, openLoading, openError, closeViewer, mobile, modal } = props;
 
   return (
     <>
@@ -297,21 +321,26 @@ function Viewer(props: {
         <div style={{ color: "#e5e7eb", fontWeight: 800, wordBreak: "break-word" }}>{openPath}</div>
 
         <button
-          type="button"
-          onClick={closeViewer}
-          style={{
-            padding: "8px 10px",
-            borderRadius: 10,
-            fontWeight: 900,
-            border: "1px solid rgba(148,163,184,0.22)",
-            background: "rgba(148,163,184,0.06)",
-            color: "#e5e7eb",
-            cursor: "pointer",
-          }}
-        >
-          Close
-        </button>
-      </div>
+            type="button"
+                onClick={closeViewer}
+                  style={{
+                    padding: modal ? "10px 12px" : "8px 10px",
+                    borderRadius: 12,
+                    fontWeight: 1000,
+                    border: "1px solid rgba(148,163,184,0.22)",
+                    background: "rgba(148,163,184,0.06)",
+                    color: "#e5e7eb",
+                    cursor: "pointer",
+                    fontSize: modal ? 16 : 14,
+                    lineHeight: 1,
+                  }}
+              aria-label="Close viewer"
+            title="Close"
+            >
+              {modal ? "✕" : "Close"}
+            </button>
+
+                  </div>
 
       <div style={{ marginTop: 10 }}>
         {openLoading && <div style={{ color: "#93c5fd", fontWeight: 800 }}>Loading…</div>}
