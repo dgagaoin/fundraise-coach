@@ -1,7 +1,6 @@
-/*fundraise-coach/app/(app)/library/page.tsx*/
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type LibraryData = {
   [folder: string]: string[];
@@ -22,6 +21,20 @@ function groupByFolder(files: string[]): LibraryData {
   return grouped;
 }
 
+function useIsMobile(breakpointPx = 820) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpointPx}px)`);
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, [breakpointPx]);
+
+  return isMobile;
+}
+
 export default function LibraryPage() {
   const [data, setData] = useState<LibraryData>({});
   const [loading, setLoading] = useState(true);
@@ -32,6 +45,9 @@ export default function LibraryPage() {
   const [openContent, setOpenContent] = useState<string>("");
   const [openLoading, setOpenLoading] = useState(false);
   const [openError, setOpenError] = useState<string>("");
+
+  const isMobile = useIsMobile(860);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetch("/api/library")
@@ -58,11 +74,10 @@ export default function LibraryPage() {
       "root",
     ];
     const existing = Object.keys(data);
-    const sorted = [
+    return [
       ...preferred.filter((f) => existing.includes(f)),
       ...existing.filter((f) => !preferred.includes(f)).sort((a, b) => a.localeCompare(b)),
     ];
-    return sorted;
   }, [data]);
 
   async function openFile(fullPath: string) {
@@ -85,6 +100,11 @@ export default function LibraryPage() {
       setOpenError("Failed to load file.");
     } finally {
       setOpenLoading(false);
+
+      // Mobile UX: scroll viewer into view after selecting a file
+      if (isMobile) {
+        setTimeout(() => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      }
     }
   }
 
@@ -94,6 +114,8 @@ export default function LibraryPage() {
     setOpenError("");
     setOpenLoading(false);
   }
+
+  const gridColumns = isMobile ? "1fr" : openPath ? "1fr 1fr" : "1fr";
 
   return (
     <div
@@ -106,7 +128,7 @@ export default function LibraryPage() {
     >
       <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Knowledge Library</h1>
       <p style={{ marginTop: 8, color: "#9ca3af", fontWeight: 600 }}>
-        This shows exactly what Fundraise Coach is trained on today. Click any file to view it.
+        This shows exactly what Fundraise Coach is trained on today. Tap any file to view it.
       </p>
 
       {loading && <p style={{ marginTop: 14, color: "#93c5fd" }}>Loading library…</p>}
@@ -121,19 +143,22 @@ export default function LibraryPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: openPath ? "1fr 1fr" : "1fr",
+            gridTemplateColumns: gridColumns,
             gap: 12,
             marginTop: 16,
             alignItems: "start",
           }}
         >
-          {/* LEFT: folder list */}
+          {/* LIST */}
           <div
             style={{
               border: "1px solid rgba(148,163,184,0.18)",
               background: "rgba(148,163,184,0.06)",
               borderRadius: 14,
               padding: 14,
+              // Desktop: keep list usable even with many files
+              maxHeight: isMobile ? undefined : 620,
+              overflow: isMobile ? undefined : "auto",
             }}
           >
             {folderOrder.map((folder) => {
@@ -150,6 +175,8 @@ export default function LibraryPage() {
                   <ul style={{ margin: 0, paddingLeft: 18, color: "#cbd5e1" }}>
                     {files.map((f) => {
                       const fullPath = folder === "root" ? f : `${folder}/${f}`;
+                      const active = fullPath === openPath;
+
                       return (
                         <li key={fullPath} style={{ marginBottom: 6 }}>
                           <button
@@ -160,10 +187,11 @@ export default function LibraryPage() {
                               margin: 0,
                               border: "none",
                               background: "transparent",
-                              color: "#bae6fd",
-                              fontWeight: 800,
+                              color: active ? "#93c5fd" : "#bae6fd",
+                              fontWeight: 850,
                               cursor: "pointer",
                               textAlign: "left",
+                              textDecoration: active ? "underline" : "none",
                             }}
                             title={`Open ${fullPath}`}
                           >
@@ -178,8 +206,8 @@ export default function LibraryPage() {
             })}
           </div>
 
-          {/* RIGHT: file viewer */}
-          {openPath && (
+          {/* VIEWER (Desktop right column) */}
+          {!isMobile && openPath && (
             <div
               style={{
                 border: "1px solid rgba(56,189,248,0.25)",
@@ -188,64 +216,35 @@ export default function LibraryPage() {
                 padding: 14,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 10,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ fontWeight: 900, color: "#7dd3fc" }}>Viewing:</div>
-                <div style={{ color: "#e5e7eb", fontWeight: 800, wordBreak: "break-word" }}>
-                  {openPath}
-                </div>
+              <Viewer
+                openPath={openPath}
+                openContent={openContent}
+                openLoading={openLoading}
+                openError={openError}
+                closeViewer={closeViewer}
+              />
+            </div>
+          )}
 
-                <button
-                  type="button"
-                  onClick={closeViewer}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    fontWeight: 900,
-                    border: "1px solid rgba(148,163,184,0.22)",
-                    background: "rgba(148,163,184,0.06)",
-                    color: "#e5e7eb",
-                    cursor: "pointer",
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                {openLoading && <div style={{ color: "#93c5fd", fontWeight: 800 }}>Loading…</div>}
-
-                {openError && (
-                  <div style={{ color: "#f87171", fontWeight: 800 }}>
-                    {openError}
-                  </div>
-                )}
-
-                {!openLoading && !openError && (
-                  <pre
-                    style={{
-                      marginTop: 10,
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid rgba(148,163,184,0.18)",
-                      background: "#0b0b0b",
-                      color: "#e5e7eb",
-                      whiteSpace: "pre-wrap",
-                      overflowX: "auto",
-                      maxHeight: 520,
-                    }}
-                  >
-                    {openContent || "(empty file)"}
-                  </pre>
-                )}
-              </div>
+          {/* VIEWER (Mobile drawer below list) */}
+          {isMobile && openPath && (
+            <div
+              ref={viewerRef}
+              style={{
+                border: "1px solid rgba(56,189,248,0.25)",
+                background: "rgba(56,189,248,0.06)",
+                borderRadius: 14,
+                padding: 14,
+              }}
+            >
+              <Viewer
+                openPath={openPath}
+                openContent={openContent}
+                openLoading={openLoading}
+                openError={openError}
+                closeViewer={closeViewer}
+                mobile
+              />
             </div>
           )}
         </div>
@@ -266,9 +265,77 @@ export default function LibraryPage() {
         <ul style={{ margin: 0, paddingLeft: 18, color: "#bae6fd" }}>
           <li>Transparent AI training sources</li>
           <li>Live connection to the knowledge base</li>
-          <li>Easy future expansion (just drop files into folders)</li>
+          <li>Easy future expansion (drop new files into folders)</li>
         </ul>
       </div>
     </div>
+  );
+}
+
+function Viewer(props: {
+  openPath: string;
+  openContent: string;
+  openLoading: boolean;
+  openError: string;
+  closeViewer: () => void;
+  mobile?: boolean;
+}) {
+  const { openPath, openContent, openLoading, openError, closeViewer, mobile } = props;
+
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ fontWeight: 900, color: "#7dd3fc" }}>Viewing:</div>
+        <div style={{ color: "#e5e7eb", fontWeight: 800, wordBreak: "break-word" }}>{openPath}</div>
+
+        <button
+          type="button"
+          onClick={closeViewer}
+          style={{
+            padding: "8px 10px",
+            borderRadius: 10,
+            fontWeight: 900,
+            border: "1px solid rgba(148,163,184,0.22)",
+            background: "rgba(148,163,184,0.06)",
+            color: "#e5e7eb",
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        {openLoading && <div style={{ color: "#93c5fd", fontWeight: 800 }}>Loading…</div>}
+
+        {openError && <div style={{ color: "#f87171", fontWeight: 800 }}>{openError}</div>}
+
+        {!openLoading && !openError && (
+          <pre
+            style={{
+              marginTop: 10,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid rgba(148,163,184,0.18)",
+              background: "#0b0b0b",
+              color: "#e5e7eb",
+              whiteSpace: "pre-wrap",
+              overflowX: "auto",
+              maxHeight: mobile ? 420 : 520,
+            }}
+          >
+            {openContent || "(empty file)"}
+          </pre>
+        )}
+      </div>
+    </>
   );
 }
