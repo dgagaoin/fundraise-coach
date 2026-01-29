@@ -46,6 +46,12 @@ export default function LibraryPage() {
   const [openLoading, setOpenLoading] = useState(false);
   const [openError, setOpenError] = useState<string>("");
 
+  // folder UI state (session-only)
+  const [folderOpen, setFolderOpen] = useState<Record<string, boolean>>({});
+  const [folderPage, setFolderPage] = useState<Record<string, number>>({});
+
+  const PAGE_SIZE = 12;
+
   const isMobile = useIsMobile(860);
   const viewerRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,7 +63,27 @@ export default function LibraryPage() {
           setError("No library data found.");
           return;
         }
-        setData(groupByFolder(json.files));
+
+        const grouped = groupByFolder(json.files);
+        setData(grouped);
+
+        // default: open all folders (can tweak later)
+        setFolderOpen((prev) => {
+          const next = { ...prev };
+          for (const k of Object.keys(grouped)) {
+            if (next[k] === undefined) next[k] = true;
+          }
+          return next;
+        });
+
+        // default: page 1 for all folders
+        setFolderPage((prev) => {
+          const next = { ...prev };
+          for (const k of Object.keys(grouped)) {
+            if (next[k] === undefined) next[k] = 1;
+          }
+          return next;
+        });
       })
       .catch(() => setError("Failed to load library."))
       .finally(() => setLoading(false));
@@ -79,6 +105,18 @@ export default function LibraryPage() {
       ...existing.filter((f) => !preferred.includes(f)).sort((a, b) => a.localeCompare(b)),
     ];
   }, [data]);
+
+  function toggleFolder(folder: string) {
+    setFolderOpen((prev) => ({ ...prev, [folder]: !(prev[folder] ?? true) }));
+  }
+
+  function getPageFor(folder: string) {
+    return folderPage[folder] ?? 1;
+  }
+
+  function setPageFor(folder: string, page: number) {
+    setFolderPage((prev) => ({ ...prev, [folder]: page }));
+  }
 
   async function openFile(fullPath: string) {
     setOpenPath(fullPath);
@@ -103,7 +141,10 @@ export default function LibraryPage() {
 
       // Mobile UX: scroll viewer into view after selecting a file
       if (isMobile) {
-        setTimeout(() => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+        setTimeout(
+          () => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          50
+        );
       }
     }
   }
@@ -116,6 +157,7 @@ export default function LibraryPage() {
   }
 
   const gridColumns = isMobile ? "1fr" : openPath ? "1fr 1fr" : "1fr";
+
 
   return (
     <div
@@ -165,43 +207,176 @@ export default function LibraryPage() {
               const files = (data[folder] ?? []).slice().sort((a, b) => a.localeCompare(b));
               return (
                 <div key={folder} style={{ marginBottom: 14 }}>
-                  <div style={{ fontWeight: 900, marginBottom: 8, color: "#e5e7eb" }}>
-                    {folder.toUpperCase()}
-                    <span style={{ marginLeft: 8, color: "#94a3b8", fontWeight: 700, fontSize: 12 }}>
-                      ({files.length})
+  {/* Folder header row */}
+  <button
+    type="button"
+    onClick={() => toggleFolder(folder)}
+    style={{
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      padding: "8px 10px",
+      borderRadius: 12,
+      border: "1px solid rgba(148,163,184,0.18)",
+      background: "rgba(148,163,184,0.06)",
+      cursor: "pointer",
+      textAlign: "left",
+    }}
+    aria-expanded={!!folderOpen[folder]}
+    title={folderOpen[folder] ? "Collapse" : "Expand"}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 14, lineHeight: 1 }}>
+        {folderOpen[folder] ? "▾" : "▸"}
+      </span>
+      <span style={{ fontWeight: 900, color: "#e5e7eb" }}>
+        {folder.toUpperCase()}
+      </span>
+      <span style={{ color: "#94a3b8", fontWeight: 800, fontSize: 12 }}>
+        ({files.length})
+      </span>
+    </div>
+
+    <span style={{ color: "#9ca3af", fontWeight: 800, fontSize: 12 }}>
+      {folderOpen[folder] ? "Hide" : "Show"}
+    </span>
+  </button>
+
+  {/* Folder body */}
+  {folderOpen[folder] && (() => {
+    const total = files.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(getPageFor(folder), totalPages);
+
+    const startIndex = (page - 1) * PAGE_SIZE;
+    const endIndex = startIndex + PAGE_SIZE;
+    const pageFiles = files.slice(startIndex, endIndex);
+
+    const canPrev = page > 1;
+    const canNext = page < totalPages;
+
+    // build page numbers (simple + clean)
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+    return (
+      <div style={{ marginTop: 10, paddingLeft: 6 }}>
+        {/* List */}
+        <ul style={{ margin: 0, paddingLeft: 18, color: "#cbd5e1" }}>
+          {pageFiles.map((f) => {
+            const fullPath = folder === "root" ? f : `${folder}/${f}`;
+            const active = fullPath === openPath;
+
+            return (
+              <li key={fullPath} style={{ marginBottom: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => openFile(fullPath)}
+                  style={{
+                    padding: 0,
+                    margin: 0,
+                    border: "none",
+                    background: "transparent",
+                    color: active ? "#93c5fd" : "#bae6fd",
+                    fontWeight: 850,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    textDecoration: active ? "underline" : "none",
+                  }}
+                  title={`Open ${fullPath}`}
+                >
+                  {f}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* Pagination (only if needed) */}
+        {totalPages > 1 && (
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => canPrev && setPageFor(folder, page - 1)}
+              disabled={!canPrev}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 12,
+                fontWeight: 900,
+                border: "1px solid rgba(148,163,184,0.22)",
+                background: "rgba(148,163,184,0.06)",
+                color: canPrev ? "#e5e7eb" : "#64748b",
+                cursor: canPrev ? "pointer" : "not-allowed",
+              }}
+              aria-label="Previous page"
+              title="Previous page"
+            >
+              ←
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {pages.map((p) => {
+                const active = p === page;
+                return (
+                  <button
+                    key={`${folder}-page-${p}`}
+                    type="button"
+                    onClick={() => setPageFor(folder, p)}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 12,
+                      fontWeight: 950,
+                      border: active
+                        ? "1px solid rgba(56,189,248,0.45)"
+                        : "1px solid rgba(148,163,184,0.22)",
+                      background: active ? "rgba(56,189,248,0.10)" : "rgba(148,163,184,0.06)",
+                      color: active ? "#7dd3fc" : "#e5e7eb",
+                      cursor: "pointer",
+                    }}
+                    aria-label={`Page ${p}`}
+                    title={`Page ${p}`}
+                  >
+                    {p}
+                  </button>
+                      );
+                      })}
+                   </div>
+                    <button
+                      type="button"
+                      onClick={() => canNext && setPageFor(folder, page + 1)}
+                      disabled={!canNext}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 12,
+                        fontWeight: 900,
+                        border: "1px solid rgba(148,163,184,0.22)",
+                        background: "rgba(148,163,184,0.06)",
+                        color: canNext ? "#e5e7eb" : "#64748b",
+                        cursor: canNext ? "pointer" : "not-allowed",
+                      }}
+                      aria-label="Next page"
+                      title="Next page"
+                    >
+                      →
+                    </button>                     
+                    <span style={{ color: "#94a3b8", fontWeight: 800, fontSize: 12 }}>
+                      Page {page} of {totalPages}
                     </span>
                   </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
 
-                  <ul style={{ margin: 0, paddingLeft: 18, color: "#cbd5e1" }}>
-                    {files.map((f) => {
-                      const fullPath = folder === "root" ? f : `${folder}/${f}`;
-                      const active = fullPath === openPath;
-
-                      return (
-                        <li key={fullPath} style={{ marginBottom: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => openFile(fullPath)}
-                            style={{
-                              padding: 0,
-                              margin: 0,
-                              border: "none",
-                              background: "transparent",
-                              color: active ? "#93c5fd" : "#bae6fd",
-                              fontWeight: 850,
-                              cursor: "pointer",
-                              textAlign: "left",
-                              textDecoration: active ? "underline" : "none",
-                            }}
-                            title={`Open ${fullPath}`}
-                          >
-                            {f}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
               );
             })}
           </div>

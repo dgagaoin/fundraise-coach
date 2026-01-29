@@ -31,7 +31,7 @@ export default function ChatPage() {
 
   const rolePlaceholderMap: Record<CoachRole, string> = {
   rep:
-    "Ask me about any of our systems, the pitches for any of the charities we represent, how to rebut or AIC potential donors, or for motivational stories.",
+    "Ask me about any of our systems, the pitches for any of the charities we represent, how to rebuttal or AIC potential donors, or for motivational stories.",
   leader:
     "Ask me how to explain any of our systems to new field reps, for the USPs to any or all charities, or for stories or quotes you could use for a crew meeting. You can also ask anything a field rep would ask.",
   owner:
@@ -309,11 +309,56 @@ export default function ChatPage() {
           }}
         >
           {messages.length === 0 && (
-            <p style={{ color: "#9ca3af", marginTop: 0, whiteSpace: "pre-wrap" }}>
-            {rolePlaceholderMap[role]}
-            </p>
-          )}
+                        <div>
+                          {/* TOP: Prompt (stays at the top) */}
+                          <p
+                            style={{
+                              color: "#9ca3af",
+                              marginTop: 0,
+                              whiteSpace: "pre-wrap",
+                            }}
+                          >
+                            {rolePlaceholderMap[role]}
+                          </p>
 
+                          {/* Spacer pushes quote down */}
+                          <div style={{ height: 120 }} />
+
+                          {/* LOWER: Quote */}
+                          <div
+                            style={{
+                              paddingTop: 14,
+                              borderTop: "1px solid rgba(148,163,184,0.18)",
+                            }}
+                          >
+                            <div style={{ color: "#cbd5e1", fontWeight: 800 }}>
+                              “Dance like no one is watching, sing like no one is listening, and love like you've never been hurt.”
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 8,
+                                color: "#94a3b8",
+                                fontWeight: 700,
+                                fontSize: 13,
+                              }}
+                            >
+                              — Anonymous / modern folk proverb
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 6,
+                                color: "#64748b",
+                                fontWeight: 700,
+                                fontSize: 12,
+                              }}
+                            >
+                              (Future easy add-on: rotating quotes, see quote section in library. Yes this AI can and will get smarter.)
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
           {messages.map((m, i) => (
             <div key={i} style={{ marginBottom: 18 }}>
