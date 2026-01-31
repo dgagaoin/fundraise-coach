@@ -28,6 +28,11 @@ export default function ChatPage() {
   const [reloadStatus, setReloadStatus] = useState<string>("");
 
   const [role, setRole] = useState<CoachRole>("rep");
+  // PDF viewer (for in-chat PDF links)
+  const [pdfPath, setPdfPath] = useState<string>("");
+  const [rotatingQuote, setRotatingQuote] = useState<string>("");
+  const [rotatingAttribution, setRotatingAttribution] = useState<string>("");
+
 
   const rolePlaceholderMap: Record<CoachRole, string> = {
   rep:
@@ -53,6 +58,18 @@ export default function ChatPage() {
     } catch {
       // ignore
     }
+    // Load rotating quote (Option A: one random quote per page load)
+    fetch("/api/quote")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.quote) {
+          setRotatingQuote(String(data.quote));
+          setRotatingAttribution(String(data.attribution || "Anonymous"));
+        }
+      })
+      .catch(() => {
+        // silent fail — quote should never break chat
+      });
   }, []);
 
   function onRoleChange(next: CoachRole) {
@@ -77,6 +94,15 @@ export default function ChatPage() {
     // Also clear any status banner so the UI feels fresh
     setReloadStatus("");
   }
+
+  function openPdf(path: string) {
+  setPdfPath(path);
+  }
+
+  function closePdf() {
+    setPdfPath("");
+  }
+
 
   async function rebuildKnowledge() {
     if (reloading) return;
@@ -144,6 +170,46 @@ export default function ChatPage() {
       setLoading(false);
     }
   }
+
+  function renderAssistantContent(content: string) {
+  const parts = content.split(/\[Open:\s*(.+?)\]/g);
+
+  return parts.map((part, i) => {
+    // Odd indexes = captured file path
+    if (i % 2 === 1) {
+      const p = String(part || "").trim();
+      return (
+        <button
+          key={`pdf-${i}-${p}`}
+          type="button"
+          onClick={() => openPdf(p)}
+          style={{
+            marginLeft: 6,
+            marginRight: 6,
+            padding: "6px 10px",
+            borderRadius: 10,
+            border: "1px solid rgba(56,189,248,0.45)",
+            background: "rgba(56,189,248,0.10)",
+            color: "#7dd3fc",
+            fontWeight: 900,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+          title={`Open ${p}`}
+        >
+          <span aria-hidden>📄</span>
+          Open PDF
+        </button>
+      );
+    }
+
+      // Normal text segments
+      return <span key={`txt-${i}`}>{part}</span>;
+    });
+  }
+
 
   return (
     <main
@@ -324,39 +390,40 @@ export default function ChatPage() {
                           {/* Spacer pushes quote down */}
                           <div style={{ height: 120 }} />
 
-                          {/* LOWER: Quote */}
-                          <div
-                            style={{
-                              paddingTop: 14,
-                              borderTop: "1px solid rgba(148,163,184,0.18)",
-                            }}
-                          >
-                            <div style={{ color: "#cbd5e1", fontWeight: 800 }}>
-                              “Dance like no one is watching, sing like no one is listening, and love like you've never been hurt.”
-                            </div>
+                          {/* LOWER: Quote (rotates on page load) */}
+                            {rotatingQuote && (
+                              <div
+                                style={{
+                                  paddingTop: 14,
+                                  borderTop: "1px solid rgba(148,163,184,0.18)",
+                                }}
+                              >
+                                <div style={{ color: "#cbd5e1", fontWeight: 800, whiteSpace: "pre-wrap" }}>
+                                  {rotatingQuote}
+                                </div>
 
-                            <div
-                              style={{
-                                marginTop: 8,
-                                color: "#94a3b8",
-                                fontWeight: 700,
-                                fontSize: 13,
-                              }}
-                            >
-                              — Anonymous / modern folk proverb
-                            </div>
-
-                            <div
-                              style={{
-                                marginTop: 6,
-                                color: "#64748b",
-                                fontWeight: 700,
-                                fontSize: 12,
-                              }}
-                            >
-                              (Future easy add-on: rotating quotes, see quote section in library. Yes this AI can and will get smarter.)
-                            </div>
-                          </div>
+                                <div
+                                  style={{
+                                    marginTop: 8,
+                                    color: "#94a3b8",
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  — {rotatingAttribution}
+                                </div>
+                                <div
+                                  style={{
+                                    marginTop: 6,
+                                    color: "#64748b",
+                                    fontWeight: 700,
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  (Future add-on: quote of the day/week + categories by culture/source.)
+                                </div>
+                              </div>
+                            )}
                         </div>
                       )}
 
@@ -373,7 +440,7 @@ export default function ChatPage() {
               </div>
 
               <div style={{ whiteSpace: "pre-wrap", color: "#e5e7eb" }}>
-                {m.content}
+                {renderAssistantContent(m.content)}
               </div>
 
               {m.role === "assistant" && m.sources && m.sources.length > 0 && (
@@ -436,6 +503,73 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+
+      {/* PDF Modal */}
+{pdfPath && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      background: "rgba(0,0,0,0.75)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    }}
+    onClick={closePdf}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 900,
+        height: "85vh",
+        background: "#0b0b0b",
+        borderRadius: 16,
+        border: "1px solid rgba(56,189,248,0.35)",
+        overflow: "hidden",
+        position: "relative",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={closePdf}
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          zIndex: 2,
+          padding: "10px 12px",
+          borderRadius: 12,
+          fontWeight: 900,
+          border: "1px solid rgba(148,163,184,0.22)",
+          background: "rgba(148,163,184,0.06)",
+          color: "#e5e7eb",
+          cursor: "pointer",
+          lineHeight: 1,
+        }}
+        aria-label="Close PDF"
+        title="Close"
+      >
+        ✕
+      </button>
+
+            <iframe
+              src={`/api/pdf?path=${encodeURIComponent(pdfPath)}`}
+              title={pdfPath}
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+                display: "block",
+                background: "#0b0b0b",
+              }}
+            />
+          </div>
+        </div>
+      )}
+      
     </main>
   );
 }

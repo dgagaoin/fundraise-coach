@@ -18,7 +18,10 @@ function listTxtFilesRecursive(dir: string, baseRel = ""): string[] {
 
     if (ent.isDirectory()) {
       out.push(...listTxtFilesRecursive(full, rel));
-    } else if (ent.isFile() && ent.name.toLowerCase().endsWith(".txt")) {
+    } else if (
+      ent.isFile() &&
+      (ent.name.toLowerCase().endsWith(".txt") || ent.name.toLowerCase().endsWith(".pdf"))
+    ) {
       out.push(rel);
     }
   }

@@ -908,6 +908,53 @@ function pickOne<T>(arr: T[]) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function detectPdfDocRequest(message: string, recentTranscript: string) {
+  const m = (message || "").toLowerCase();
+  const t = (recentTranscript || "").toLowerCase();
+  const all = `${m}\n${t}`;
+
+  const wantsPdf =
+    all.includes("pdf") ||
+    all.includes("open") ||
+    all.includes("show me") ||
+    all.includes("pull up") ||
+    all.includes("document") ||
+    all.includes("file");
+
+  const wantsCod =
+    all.includes("code of development") ||
+    /\bcod\b/.test(all);
+
+  if (!wantsPdf || !wantsCod) return null;
+
+  // Specific variants
+  const wantsLeaderCod =
+    all.includes("becoming a leader") ||
+    all.includes("leader cod") ||
+    (all.includes("leader") && all.includes("code of development"));
+
+  const wantsFirstWeek =
+    all.includes("first week") ||
+    all.includes("week 1") ||
+    all.includes("fr first week");
+
+  // Default behavior:
+  // - If they asked leader COD or "becoming a leader" => COD-3
+  // - Otherwise COD-2
+  if (wantsLeaderCod) return "pdfs/cod-becoming-a-leader.pdf";
+  if (wantsFirstWeek) return "pdfs/cod-first-week.pdf";
+  return "pdfs/cod-first-week.pdf";
+}
+
+function pdfExists(relPath: string) {
+  try {
+    const full = path.join(process.cwd(), "knowledge", relPath);
+    return fs.existsSync(full);
+  } catch {
+    return false;
+  }
+}
+
 
 export async function POST(req: Request) {
   try {
@@ -920,6 +967,35 @@ export async function POST(req: Request) {
     if (!message) {
       return NextResponse.json({ error: "Missing message" }, { status: 400 });
     }
+
+    const recentTranscript = messages.length ? toTranscript(messages) : "";
+
+    // --- PDF LINK MODE (Deterministic) ---
+    // If user asks for Code of Development PDF, return the Open token directly.
+    // This bypasses the model so it never says "I can't open it".
+    const codPdf = detectPdfDocRequest(message, recentTranscript);
+
+    if (codPdf) {
+      if (!pdfExists(codPdf)) {
+        return NextResponse.json({
+          reply:
+            "I found a Code of Development PDF request, but the PDF file was not found in knowledge/" +
+            codPdf +
+            ". Please confirm the filename in knowledge/pdfs.",
+          sources: [],
+          meta: { role, mode: "PDF LINK (Deterministic)", requested: codPdf, found: false },
+        });
+      }
+
+      return NextResponse.json({
+        reply:
+          "Sure — open it here:\n" +
+          `[Open: ${codPdf}]`,
+        sources: [codPdf],
+        meta: { role, mode: "PDF LINK (Deterministic)", requested: codPdf, found: true },
+      });
+    }
+
 
     const charity = detectCharity(message);
 
@@ -1326,10 +1402,6 @@ export async function POST(req: Request) {
           pinnedStandardClose
         }`
       : systemWithRole;
-
-
-
-    const recentTranscript = messages.length ? toTranscript(messages) : "";
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",

@@ -119,35 +119,54 @@ export default function LibraryPage() {
   }
 
   async function openFile(fullPath: string) {
-    setOpenPath(fullPath);
-    setOpenContent("");
-    setOpenError("");
-    setOpenLoading(true);
+  const isPdf = fullPath.toLowerCase().endsWith(".pdf");
 
-    try {
-      const res = await fetch(`/api/library/file?path=${encodeURIComponent(fullPath)}`);
-      const json = await res.json();
+  setOpenPath(fullPath);
+  setOpenContent("");
+  setOpenError("");
 
-      if (!res.ok) {
-        setOpenError(json?.error ?? "Failed to load file.");
-        return;
-      }
+  // PDFs are streamed via /api/pdf, no JSON fetch needed here
+  if (isPdf) {
+    setOpenLoading(false);
 
-      setOpenContent(String(json?.content ?? ""));
-    } catch {
-      setOpenError("Failed to load file.");
-    } finally {
-      setOpenLoading(false);
+    // Mobile UX: scroll viewer into view after selecting a file
+    if (isMobile) {
+      setTimeout(
+        () => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        50
+      );
+    }
+    return;
+  }
 
-      // Mobile UX: scroll viewer into view after selecting a file
-      if (isMobile) {
-        setTimeout(
-          () => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-          50
-        );
-      }
+  // TXT path (existing behavior)
+  setOpenLoading(true);
+
+  try {
+    const res = await fetch(`/api/library/file?path=${encodeURIComponent(fullPath)}`);
+    const json = await res.json();
+
+    if (!res.ok) {
+      setOpenError(json?.error ?? "Failed to load file.");
+      return;
+    }
+
+    setOpenContent(String(json?.content ?? ""));
+  } catch {
+    setOpenError("Failed to load file.");
+  } finally {
+    setOpenLoading(false);
+
+    // Mobile UX: scroll viewer into view after selecting a file
+    if (isMobile) {
+      setTimeout(
+        () => viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        50
+      );
     }
   }
+}
+
 
   function closeViewer() {
     setOpenPath("");
@@ -522,7 +541,38 @@ function Viewer(props: {
 
         {openError && <div style={{ color: "#f87171", fontWeight: 800 }}>{openError}</div>}
 
-        {!openLoading && !openError && (
+        {!openLoading && !openError && (() => {
+        const isPdf = openPath.toLowerCase().endsWith(".pdf");
+
+        if (isPdf) {
+          const src = `/api/pdf?path=${encodeURIComponent(openPath)}`;
+
+          return (
+            <div
+              style={{
+                marginTop: 10,
+                borderRadius: 12,
+                border: "1px solid rgba(148,163,184,0.18)",
+                overflow: "hidden",
+                background: "#0b0b0b",
+              }}
+            >
+              <iframe
+                src={src}
+                title={openPath}
+                style={{
+                  width: "100%",
+                  height: mobile ? 420 : 520,
+                  border: "none",
+                  display: "block",
+                  background: "#0b0b0b",
+                }}
+              />
+            </div>
+          );
+        }
+
+        return (
           <pre
             style={{
               marginTop: 10,
@@ -538,7 +588,8 @@ function Viewer(props: {
           >
             {openContent || "(empty file)"}
           </pre>
-        )}
+        );
+      })()}
       </div>
     </>
   );
