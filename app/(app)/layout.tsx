@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import WarmupPing from "./_components/WarmupPing";
+
 
 type AppRole = "fr" | "leader" | "admin" | "owner";
 
@@ -106,6 +108,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#000", color: "#e5e7eb" }}>
+     <WarmupPing />
+
       <div
         style={{
           position: "sticky",
@@ -185,8 +189,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </div>
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: "18px 16px" }}>
+        {children}
+      </div>
 
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: "18px 16px" }}>{children}</div>
     </div>
   );
 }

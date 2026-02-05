@@ -1,4 +1,8 @@
 /*fundraise-coach/app/(app)/team/page.tsx*/
+"use client";
+import { useState } from "react";
+
+
 type ToolCardProps = {
   title: string;
   description: string;
@@ -72,6 +76,16 @@ function ToolCard({ title, description, bullets, badge }: ToolCardProps) {
 }
 
 export default function TeamPage() {
+  const [pdfPath, setPdfPath] = useState<string>("");
+
+  function openPdf(path: string) {
+    setPdfPath(path);
+  }
+
+  function closePdf() {
+    setPdfPath("");
+  }
+
   return (
     <div
       style={{
@@ -163,16 +177,132 @@ export default function TeamPage() {
             "Scenario planning (slow week / road trip)",
           ]}
         />
+            <div
+              style={{
+                border: "1px solid rgba(148,163,184,0.18)",
+                background: "rgba(148,163,184,0.06)",
+                borderRadius: 14,
+                padding: 14,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                minHeight: 180,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ fontWeight: 1000, fontSize: 15 }}>COD Checklist (PDF)</div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 900,
+                    color: "#93c5fd",
+                    border: "1px solid rgba(59,130,246,0.35)",
+                    background: "rgba(59,130,246,0.10)",
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Leadership
+                </div>
+              </div>
 
-        <ToolCard
-          title="COD Checklist"
-          description="Code of Development checklist for consistent training + leadership standards."
-          bullets={[
-            "Daily/weekly behaviors checklist",
-            "Leader expectations & coaching habits",
-            "Progress snapshots over time",
-          ]}
-        />
+              <div style={{ color: "#9ca3af", fontWeight: 800, lineHeight: 1.35 }}>
+                Code of Development checklist for leadership standards (Becoming a Leader).
+              </div>
+
+              <ul style={{ margin: 0, paddingLeft: 18, color: "#cbd5e1", fontWeight: 700, lineHeight: 1.35 }}>
+                <li>Daily/weekly behaviors checklist</li>
+                <li>Leader expectations & coaching habits</li>
+                <li>Progress snapshots over time</li>
+              </ul>
+
+              <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => openPdf("pdfs/cod-becoming-a-leader.pdf")}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    fontWeight: 1000,
+                    border: "1px solid rgba(56,189,248,0.35)",
+                    background: "rgba(56,189,248,0.10)",
+                    color: "#7dd3fc",
+                    cursor: "pointer",
+                  }}
+                  title="Open Becoming a Leader COD PDF"
+                >
+                  Open PDF →
+                </button>
+              </div>
+
+              {/* PDF Modal */}
+                  {pdfPath && (
+                    <div
+                      style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 9999,
+                        background: "rgba(0,0,0,0.75)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 16,
+                      }}
+                      onClick={closePdf}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          maxWidth: 980,
+                          height: "85vh",
+                          background: "#0b0b0b",
+                          borderRadius: 16,
+                          border: "1px solid rgba(56,189,248,0.35)",
+                          overflow: "hidden",
+                          position: "relative",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={closePdf}
+                          style={{
+                            position: "absolute",
+                            top: 10,
+                            right: 10,
+                            zIndex: 2,
+                            padding: "10px 12px",
+                            borderRadius: 12,
+                            fontWeight: 900,
+                            border: "1px solid rgba(148,163,184,0.22)",
+                            background: "rgba(148,163,184,0.06)",
+                            color: "#e5e7eb",
+                            cursor: "pointer",
+                            lineHeight: 1,
+                          }}
+                          aria-label="Close PDF"
+                          title="Close"
+                        >
+                          ✕
+                        </button>
+
+                        <iframe
+                          src={`/api/pdf?path=${encodeURIComponent(pdfPath)}`}
+                          title={pdfPath}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            border: "none",
+                            display: "block",
+                            background: "#0b0b0b",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+            </div>
 
         <ToolCard
           title="Road Trip Planner"

@@ -24,6 +24,11 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
 
+
+  // Warmup / initialize UX (prevents the “first question too fast” issue)
+  const [systemReady, setSystemReady] = useState(false);
+  const [warmupMsg, setWarmupMsg] = useState("Please wait while the system initializes…");
+
   const [reloading, setReloading] = useState(false);
   const [reloadStatus, setReloadStatus] = useState<string>("");
 
@@ -71,6 +76,43 @@ export default function ChatPage() {
         // silent fail — quote should never break chat
       });
   }, []);
+
+  // Warm up server/RAG so the first user question doesn’t race initialization
+  useEffect(() => {
+    let alive = true;
+
+    async function warm() {
+      try {
+        setSystemReady(false);
+        setWarmupMsg("Please wait while the system initializes…");
+
+        const res = await fetch("/api/warmup", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+
+        if (!alive) return;
+
+        // Our /api/warmup returns { ok: true } on success
+        if (res.ok && data?.ok === true) {
+          setSystemReady(true);
+          setWarmupMsg("Go ahead and type your question.");
+        } else {
+          // Don’t hard-block the UI forever if warmup errors
+          setSystemReady(true);
+          setWarmupMsg("Go ahead and type your question.");
+        }
+      } catch {
+        if (!alive) return;
+        setSystemReady(true);
+        setWarmupMsg("Go ahead and type your question.");
+      }
+    }
+
+    warm();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
 
   function onRoleChange(next: CoachRole) {
     setRole(next);
@@ -475,7 +517,8 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="Type your question here"
+            disabled={!systemReady || loading}
+            placeholder={warmupMsg}
             style={{
               flex: 1,
               padding: 12,
@@ -488,7 +531,7 @@ export default function ChatPage() {
           />
           <button
             onClick={sendMessage}
-            disabled={loading}
+            disabled={!systemReady || loading || !input.trim()}
             style={{
               padding: "0 16px",
               borderRadius: 10,

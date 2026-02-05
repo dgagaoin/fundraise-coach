@@ -509,6 +509,19 @@ function isLongPitchRequest(message: string) {
   );
 }
 
+function isShortAnswerRequest(message: string) {
+  const m = message.toLowerCase();
+  return (
+    m.includes("tl;dr") ||
+    m.includes("tldr") ||
+    m.includes("short version") ||
+    m.includes("quick version") ||
+    m.includes("one-liner") ||
+    (m.includes("summary") && (m.includes("short") || m.includes("quick")))
+  );
+}
+
+
 /**
  * AIC detection: questions/objections that happen BEFORE the close.
  * We intentionally keep this high-precision so it doesn't steal "rebuttal" questions.
@@ -957,8 +970,17 @@ function pdfExists(relPath: string) {
 
 
 export async function POST(req: Request) {
+  const __t0 = Date.now();
+  const __mark = (label: string) => {
+    const ms = Date.now() - __t0;
+    console.log(`[CHAT PERF] ${label} @ ${ms}ms`);
+  };
+
+  __mark("POST start");
+
   try {
     const body = await req.json();
+        __mark("parsed req.json");
 
     const message = String(body?.message ?? "").trim();
     const messages = Array.isArray(body?.messages) ? (body.messages as ClientMsg[]) : [];
@@ -1181,11 +1203,15 @@ export async function POST(req: Request) {
       : "";
 
     // Important: We keep ONE ragSearch call. We just add hints.
-    const ragTopK = (uspAllMode || rebuttalUspAllMode) ? 22 : 6;
-    const { context, usedSources } = await ragSearch(
+    const ragTopK = (uspAllMode || rebuttalUspAllMode) ? 22 : 14;
+    __mark("before ragSearch");
+    const { context, usedSources, hardCategory } = await ragSearch(
       baseQuery + rebuttalHint + aicHint + kpiHint,
-    { topK: ragTopK }
+      { topK: ragTopK, role }
     );
+
+    __mark("after ragSearch");
+
 
     // If we are generating a pitch, we MUST pin the Standard Close from context (verbatim).
         // If we are generating a pitch, we MUST pin the Standard Close from the *actual* Standard Close doc (verbatim).
@@ -1210,6 +1236,7 @@ export async function POST(req: Request) {
           sources: usedSources,
           meta: {
             role,
+            hardCategory,
             coachMode,
             kpiMode,
             pitchMode,
@@ -1234,7 +1261,13 @@ export async function POST(req: Request) {
       "You are a helpful, motivating fundraising coach for face-to-face sales teams. " +
       "Use the provided CONTEXT to answer questions about our systems, rebuttals, charity pitches, and training. " +
       "If the answer is not in the context, say you don't have it in the training materials yet and ask what doc to add. " +
-      "Be practical, short, and actionable (KISS). " +
+      "DEFAULT ANSWER DEPTH:\n" +
+      "- By default, give a comprehensive breakdown of what is in CONTEXT.\n" +
+      "- Do NOT give a short summary unless the user explicitly asks for: 'short', 'tl;dr', 'summary', 'quick version', or 'one-liner'.\n" +
+      "- If the question is about a specific topic (ex: recruiting tips), extract and list ALL relevant points you can find in CONTEXT.\n" +
+      "- Prefer bullet points and grouped sections when the source has multiple ideas.\n" +
+      "- If multiple sources contain relevant items, merge them, but do not invent.\n" +
+      "- If something is only partially in CONTEXT, answer what you have and say what’s missing.\n\n" +
       "IMPORTANT: Do not use markdown formatting (no **bold**, no backticks, no headings). Use plain text only. " +
       "IMPORTANT REBUTTAL RULE: If a rebuttal exists in Core Rebuttals training materials, you MUST provide it even if it is not charity-specific. " +
       "Do not say a rebuttal is missing if it exists in Core Rebuttals. Only ask to add a document if it truly does not appear in training. " +
@@ -1403,6 +1436,7 @@ export async function POST(req: Request) {
         }`
       : systemWithRole;
 
+    __mark("before openai.chat.completions.create");  
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -1418,6 +1452,7 @@ export async function POST(req: Request) {
       ],
             temperature: pitchMode ? 0.1 : 0.25,
     });
+    __mark("after openai.chat.completions.create");
 
     const rawReply = completion.choices[0].message.content ?? "";
 
@@ -1428,6 +1463,7 @@ export async function POST(req: Request) {
       replyText = enforcePitchClose(replyText, pinnedStandardClose);
     }
 
+    __mark("POST end (success)");
     return NextResponse.json({
       reply: replyText,
       sources: pitchMode ? Array.from(new Set([...usedSources, "core/standard-close.txt"])) : usedSources,
