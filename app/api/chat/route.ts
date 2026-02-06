@@ -1205,12 +1205,50 @@ export async function POST(req: Request) {
     // Important: We keep ONE ragSearch call. We just add hints.
     const ragTopK = (uspAllMode || rebuttalUspAllMode) ? 22 : 14;
     __mark("before ragSearch");
-    const { context, usedSources, hardCategory } = await ragSearch(
+    const { context, usedSources, hardCategory, verbatim } = await ragSearch(
       baseQuery + rebuttalHint + aicHint + kpiHint,
       { topK: ragTopK, role }
     );
 
     __mark("after ragSearch");
+
+    // --- VERBATIM DOC MODE (Deterministic) ---
+    // If rag.ts flags this as "verbatim", we return the underlying doc text directly.
+    // No model call. No paraphrasing. No hallucinations.
+    if (verbatim) {
+      // We expect usedSources to be the tablet signup doc (hard-gated in rag.ts).
+      const paths = Array.from(new Set(usedSources)).filter(Boolean);
+
+      if (!paths.length) {
+        return NextResponse.json({
+          reply:
+            "Tablet Signup Process doc was not retrieved. If the file exists, check that its name contains 'tablet' and 'signup' and lives under knowledge/core/.",
+          sources: [],
+          meta: { role, mode: "VERBATIM DOC (Deterministic)", hardCategory, found: false },
+        });
+      }
+
+      const parts: string[] = [];
+      for (const p of paths) {
+        const txt = await readKnowledgeDoc(p);
+        if (txt?.trim()) parts.push(txt.trim());
+      }
+
+      if (!parts.length) {
+        return NextResponse.json({
+          reply:
+            "Tablet Signup Process doc was retrieved but appears empty/unreadable. Check the .txt file in knowledge/core/.",
+          sources: paths,
+          meta: { role, mode: "VERBATIM DOC (Deterministic)", hardCategory, found: false },
+        });
+      }
+
+      return NextResponse.json({
+        reply: parts.join("\n\n"),
+        sources: paths,
+        meta: { role, mode: "VERBATIM DOC (Deterministic)", hardCategory, found: true },
+      });
+      }
 
 
     // If we are generating a pitch, we MUST pin the Standard Close from context (verbatim).

@@ -35,6 +35,16 @@ export default function ChatPage() {
   const [role, setRole] = useState<CoachRole>("rep");
   // PDF viewer (for in-chat PDF links)
   const [pdfPath, setPdfPath] = useState<string>("");
+  // Source viewer modal state
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceKind, setSourceKind] = useState<"text" | "pdf" | "unknown">("unknown");
+  const [sourceText, setSourceText] = useState("");
+  const [sourceFileUrl, setSourceFileUrl] = useState("");
+  const [sourceRelPath, setSourceRelPath] = useState("");
+
   const [rotatingQuote, setRotatingQuote] = useState<string>("");
   const [rotatingAttribution, setRotatingAttribution] = useState<string>("");
 
@@ -145,6 +155,79 @@ export default function ChatPage() {
     setPdfPath("");
   }
 
+  function humanizeSourceLabel(relPath: string) {
+    const p = String(relPath || "").replaceAll("\\", "/");
+    const parts = p.split("/").filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : p || "(unknown)";
+  }
+
+  function closeSource() {
+    setSourceOpen(false);
+    setSourceLoading(false);
+    setSourceError("");
+    setSourceTitle("");
+    setSourceKind("unknown");
+    setSourceText("");
+    setSourceFileUrl("");
+    setSourceRelPath("");
+  }
+
+  async function openSource(relPath: string) {
+    console.log("openSource clicked:", relPath);
+    const p = String(relPath || "").trim();
+    if (!p) return;
+
+    setSourceOpen(true);
+    setSourceLoading(true);
+    setSourceError("");
+    setSourceTitle(humanizeSourceLabel(p));
+    setSourceKind("unknown");
+    setSourceText("");
+    setSourceFileUrl("");
+    setSourceRelPath(p);
+
+    try {
+      const res = await fetch(
+        `/api/knowledge?path=${encodeURIComponent(p)}`,
+        { cache: "no-store" }
+      );
+
+      const data = await res.json();
+      console.log("[openSource] /api/knowledge payload:", data);
+      console.log("[openSource] kind typeof:", typeof (data as any)?.kind, "value:", (data as any)?.kind);
+
+      if (!res.ok) {
+        setSourceError(data?.error || "Failed to load source");
+        return;
+      }
+
+      const kind = String((data as any)?.kind ?? "").toLowerCase().trim();
+
+      if (kind === "text" || kind === "txt") {
+        setSourceKind("text");
+        setSourceText(String((data as any)?.text ?? ""));
+        return;
+      }
+
+      if (kind === "pdf") {
+        setSourceKind("pdf");
+        setSourceFileUrl(
+          String((data as any)?.fileUrl ?? "") || `/api/pdf?path=${encodeURIComponent(p)}`
+        );
+        return;
+      }
+
+      setSourceError(
+        `Unsupported source type. kind=${JSON.stringify((data as any)?.kind)} keys=${Object.keys((data as any) || {}).join(",")}`
+      );
+
+    } catch {
+      setSourceError("Network error loading source");
+    } finally {
+      setSourceLoading(false);
+    }
+  }
+
 
   async function rebuildKnowledge() {
     if (reloading) return;
@@ -224,7 +307,7 @@ export default function ChatPage() {
         <button
           key={`pdf-${i}-${p}`}
           type="button"
-          onClick={() => openPdf(p)}
+          onClick={() => openSource(p)}
           style={{
             marginLeft: 6,
             marginRight: 6,
@@ -498,13 +581,29 @@ export default function ChatPage() {
                   }}
                 >
                   <b style={{ color: "#7dd3fc" }}>Sources used:</b>
-                  <ul style={{ marginTop: 6, paddingLeft: 18 }}>
-                    {m.sources.map((s, idx) => (
-                      <li key={idx} style={{ color: "#bae6fd" }}>
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
+                  <ul style={{ fontSize: 12 }}>
+                      {m.sources.map((s, idx) => (
+                        <li key={idx} style={{ marginBottom: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => openSource(String(s))}
+                            title={String(s)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              padding: 0,
+                              margin: 0,
+                              color: "#7dd3fc",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                              fontWeight: 700,
+                            }}
+                          >
+                          {humanizeSourceLabel(String(s))}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                 </div>
               )}
             </div>
@@ -548,71 +647,145 @@ export default function ChatPage() {
       </div>
 
       {/* PDF Modal */}
-{pdfPath && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 9999,
-      background: "rgba(0,0,0,0.75)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16,
-    }}
-    onClick={closePdf}
-  >
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 900,
-        height: "85vh",
-        background: "#0b0b0b",
-        borderRadius: 16,
-        border: "1px solid rgba(56,189,248,0.35)",
-        overflow: "hidden",
-        position: "relative",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        type="button"
-        onClick={closePdf}
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          zIndex: 2,
-          padding: "10px 12px",
-          borderRadius: 12,
-          fontWeight: 900,
-          border: "1px solid rgba(148,163,184,0.22)",
-          background: "rgba(148,163,184,0.06)",
-          color: "#e5e7eb",
-          cursor: "pointer",
-          lineHeight: 1,
-        }}
-        aria-label="Close PDF"
-        title="Close"
-      >
-        ✕
-      </button>
-
-            <iframe
-              src={`/api/pdf?path=${encodeURIComponent(pdfPath)}`}
-              title={pdfPath}
+      {pdfPath && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={closePdf}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 900,
+              height: "85vh",
+              background: "#0b0b0b",
+              borderRadius: 16,
+              border: "1px solid rgba(56,189,248,0.35)",
+              overflow: "hidden",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closePdf}
               style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-                display: "block",
-                background: "#0b0b0b",
+                position: "absolute",
+                top: 10,
+                right: 10,
+                zIndex: 2,
+                padding: "10px 12px",
+                borderRadius: 12,
+                fontWeight: 900,
+                border: "1px solid rgba(148,163,184,0.22)",
+                background: "rgba(148,163,184,0.06)",
+                color: "#e5e7eb",
+                cursor: "pointer",
+                lineHeight: 1,
               }}
-            />
-          </div>
-        </div>
-      )}
-      
-    </main>
-  );
-}
+              aria-label="Close PDF"
+              title="Close"
+            >
+              ✕
+            </button>
+
+                  <iframe
+                    src={`/api/pdf?path=${encodeURIComponent(pdfPath)}`}
+                    title={pdfPath}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      border: "none",
+                      display: "block",
+                      background: "#0b0b0b",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+          {/* SOURCE MODAL */}
+          {sourceOpen && (
+            <div
+              onClick={closeSource}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.75)",
+                zIndex: 10000,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: "100%",
+                  maxWidth: 960,
+                  height: "85vh",
+                  background: "#0b0b0b",
+                  borderRadius: 14,
+                  border: "1px solid rgba(148,163,184,0.25)",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: 12,
+                    borderBottom: "1px solid rgba(148,163,184,0.25)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <strong>{sourceTitle}</strong>
+                    <div style={{ fontSize: 12, opacity: 0.6 }}>{sourceRelPath}</div>
+                  </div>
+                  <button onClick={closeSource}>✕</button>
+                </div>
+
+                <div style={{ padding: 12, overflow: "auto", flex: 1 }}>
+                  {sourceLoading && <div>Loading…</div>}
+
+                  {sourceError && (
+                    <div style={{ color: "#fca5a5", fontWeight: 700 }}>
+                      {sourceError}
+                    </div>
+                  )}
+
+                  {!sourceLoading && sourceKind === "text" && (
+                    <pre style={{ whiteSpace: "pre-wrap" }}>{sourceText}</pre>
+                  )}
+
+                  {!sourceLoading && sourceKind === "pdf" && (
+                    <>
+                      <a href={sourceFileUrl} target="_blank" rel="noreferrer">
+                        Open PDF in new tab
+                      </a>
+                      <iframe
+                        src={sourceFileUrl}
+                        style={{ width: "100%", height: "70vh", marginTop: 8 }}
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          </main>
+      );
+    }

@@ -1,0 +1,133 @@
+# ChildFund International — Charity Product Knowledge (Fundraise-Coach RAG)
+
+1. **Official name / common name**
+
+* ChildFund International (sometimes shown as “ChildFund International, USA”)
+
+2. **Founded / founder**
+
+* Founded: **1938** (began as **China’s Children Fund**)
+* Founder: **Dr. J. Calvitt Clarke** (credited with applying/innovating the modern **child sponsorship** concept the organization still uses)
+
+3. **Headquarters**
+
+* **2821 Emerywood Parkway, Richmond, VA 23294 (USA)**
+
+4. **Mission statement (verbatim-style, in plain text for RAG)**
+
+* ChildFund exists to help deprived, excluded and vulnerable children have the capacity to improve their lives and the opportunity to become young adults, parents and leaders who bring lasting and positive change in their communities.
+* We promote societies whose individuals and institutions participate in valuing, protecting and advancing the worth and rights of children.
+* We enrich supporters’ lives through their support of our cause.
+
+5. **What they’re most known for**
+
+* **Child sponsorship**: one-to-one sponsor relationships that fund community-based programs where sponsored children live.
+* Long history (since 1938) as one of the better-known international child-focused development organizations.
+
+6. **Core focus areas / what they do (high level)**
+
+* Locally led development with local partner organizations.
+* Key program themes commonly described as:
+
+  * **Education & literacy**
+  * **Health & sanitation**
+  * **Nutrition**
+  * **Early childhood development**
+  * **Youth livelihoods / micro-enterprise**
+  * **Child protection (including online safety) & advocacy**
+  * **Humanitarian response / emergencies**
+
+7. **Expense breakdown (cause vs admin vs fundraising)**
+
+* Based on their audited financial statement (FY ended **June 30, 2024**):
+
+  * **Program services:** $169,413,075 (≈ **76.2%**)
+  * **Fundraising:** $31,732,764 (≈ **14.3%**)
+  * **Management & general (administration):** $21,143,751 (≈ **9.5%**)
+  * (These are “Total expenses from operations,” as presented in the consolidated statement of activities.)
+
+8. **Watchdog / ratings (current at time of research)**
+
+* **Charity Navigator:** **99%** overall, **Four-Star** rating
+* **BBB Wise Giving Alliance (Give.org):** **Meets Standards**
+* **CharityWatch:** **B+**
+
+9. **Where they work (countries)**
+
+* ChildFund reports working in **24 countries**, including the **United States**.
+* Countries listed (commonly shown in ChildFund quick facts / sponsor lists):
+
+  * **Africa:** Ethiopia, The Gambia, Guinea, Kenya, Mozambique, Senegal, Sierra Leone, Uganda, Zambia
+  * **Americas:** Bolivia, Brazil, Ecuador, Guatemala, Honduras, Mexico, United States
+  * **Asia-Pacific:** Cambodia, India, Indonesia, Philippines, Sri Lanka, Thailand, Timor‑Leste, Vietnam
+
+10. **What they do in the United States (key talking points)**
+
+* ChildFund has served children in the U.S. since **1952**.
+* Current/known focus states: **Mississippi** and **Texas** (recently concluded work in **Oklahoma** and **South Dakota**).
+* U.S. program focus:
+
+  * **Parent & community engagement** and empowerment
+  * **Youth agency** (youth-led participation)
+  * **Literacy** and education (notably **Just Read!**)
+  * **Child protection** work (including assessments/interventions in communities affected by violence)
+  * Support for vulnerable children/teens in humanitarian contexts (e.g., past border-related child protection needs in Texas)
+
+11. **Programs & giving options fundraisers should know**
+
+* **Sponsor a child** (typically marketed around ~$39/month)
+* **Gift catalog** (donor can select tangible needs like school supplies, livestock, etc.)
+* **General / unrestricted giving** (where needs are greatest)
+* **Emergency / humanitarian response** appeals
+* **Protect Children Online** (online safety/child protection focus)
+* **Corporate partnerships** and matching gifts
+* **Major gifts & planned giving**
+
+12. **Partners / affiliations**
+
+* **ChildFund Alliance** (global network; ChildFund is described as a founding member)
+* Operates with/through **local partner organizations** in each country.
+* U.S. example partner noted on their site: **Operation Shoestring** (Mississippi)
+
+13. **Major impact numbers / milestones (useful fundraiser talking points)**
+
+* ChildFund states that in **2024** they helped **24.3 million people** in **23 countries** improve access to health care, nutrition, education, livelihoods, and protection.
+* (Older quick facts also cite very large annual reach totals across children + families, and emphasize long tenure + community-based model.)
+
+14. **CEO / leadership and compensation**
+
+* President/CEO listed: **Isameldein (Isam) Ghanim**
+* Compensation (as shown by Charity Navigator’s IRS Form 990-based compensation listing): **$393,722** (filing year shown as 2024)
+
+15. **Celebrity endorsements / affiliates (notes for fundraisers)**
+
+* No single long-term, widely recognized “global celebrity ambassador” surfaced consistently in top watchdog/official pages during this research.
+* ChildFund has hosted/partnered with public figures/performers in fundraising contexts (example: “ChildFund LIVE!” type events), but treat celebrity references as campaign/event-specific and verify by campaign.
+
+16. **Websites (official + related) and social channels**
+
+* Primary website: **childfund.org**
+* Related network site: **childfundalliance.org**
+* Related legacy/affiliate site sometimes encountered: **childfund-intl.org**
+* Social (as shown on ChildFund site footer/links):
+
+  * Facebook: ChildFund International
+  * X/Twitter: ChildFund
+  * Instagram: ChildFund
+  * YouTube: ChildFund
+  * LinkedIn: ChildFund International
+  * Pinterest: ChildFund
+
+17. **Positive stories (examples of story angles that tend to resonate)**
+
+* ChildFund’s “local leadership / locally led development” positioning: resources + guidance to local orgs that know their communities.
+* Literacy outcomes in U.S. communities via **Just Read!** (book access, reading clubs/festivals, culturally relevant books).
+* Child protection/community interventions (assessments + targeted supports, youth civic engagement, family strengthening).
+
+18. **Fundraiser-ready ‘why it matters’ talking points (quick bullets)**
+
+* “In it for kids since **1938**.” (longevity + credibility)
+* “Child sponsorship + community change” (sponsor connects to a child while funds strengthen the whole community)
+* “Locally led development” (solutions shaped by the people living them)
+* “Rated highly by watchdogs” (Four-Star Charity Navigator; BBB Meets Standards; CharityWatch B+)
+* “Works in **24 countries** including the U.S.” (global + domestic impact)

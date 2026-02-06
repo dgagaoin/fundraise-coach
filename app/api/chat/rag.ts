@@ -35,6 +35,15 @@ type RagState = {
   inverted: Map<string, number[]>;
 };
 
+export type RagSearchResult = {
+  context: string;
+  usedSources: string[];
+  hardCategory: HardCategory;
+  // when true, route.ts can bypass the model and return doc text verbatim
+  verbatim?: boolean;
+};
+
+
 declare global {
   // eslint-disable-next-line no-var
   var __fc_rag_state: RagState | undefined;
@@ -276,6 +285,12 @@ function filenameBoostScore(query: string, source: string) {
       /(\bomar\b|\bomark\b|\bomar k\b|\brecruit|\brecruitment|\brecruiting|\binterview|\bhiring|\bindeed|\badmin\b)/i,
       3.2,
     ],
+    // Tablet signup process doc should win deterministically
+    [
+      /(\btablet\b|\bsign\s*up\b|\bsignup\b|\bsign-?up\b|\benroll\b).*(\bprocess\b|\bworkflow\b|\bhow\b|\buse\b|\bwork\b)/i,
+      /(\btablet\b.*\bsignup\b|\bsignup\b.*\bprocess\b|\btablet_signup\b|\btablet signup\b)/i,
+      3.5,
+    ],
 
     // Charity pitch hard boosts (so the charity doc beats generic core text)
     [
@@ -507,11 +522,29 @@ type HardCategory =
   | "pdfs"
   | "product_knowledge"
   | "charity_information"
+  | "tablet_signup"
   | "core"
   | null;
 
+
+
 function detectHardCategory(query: string): HardCategory {
   const q = (query || "").toLowerCase();
+
+  // Tablet / signup deterministic intent
+  const wantsTabletSignup =
+    (q.includes("tablet") || q.includes("ipad")) &&
+    (
+      q.includes("sign up") ||
+      q.includes("signup") ||
+      q.includes("sign-up") ||
+      q.includes("process") ||
+      q.includes("how do i") ||
+      q.includes("how to") ||
+      q.includes("work") ||
+      q.includes("use") ||
+      q.includes("system")
+    );
 
   const mentionsCharity =
     q.includes("care") ||
@@ -545,6 +578,18 @@ function detectHardCategory(query: string): HardCategory {
   const wantsCore =
     q.includes("5 steps") || q.includes("manufactured conversation") || q.includes("core");
 
+  const wantsHowTo =
+    q.includes("how") ||
+    q.includes("process") ||
+    q.includes("workflow") ||
+    q.includes("work") ||
+    q.includes("use") ||
+    q.includes("do i") ||
+    q.includes("what do i");
+
+  // Tablet signup is a special case: the doc lives in core/ (not systems/)
+  if (wantsTabletSignup && wantsHowTo) return "tablet_signup";
+  
   // Hard-gates (order matters)
   if (wantsPitch && mentionsCharity) return "pitches";
   if (wantsRebuttal && mentionsCharity) return "rebuttals_plus_charity";
@@ -557,6 +602,8 @@ function detectHardCategory(query: string): HardCategory {
   // If they’re asking general “about the charity” (without pitch),
   // keep it in charity_information
   if (mentionsCharity && wantsCharityInfo) return "charity_information";
+
+  if (wantsTabletSignup) return "tablet_signup";
 
   if (wantsCore) return "core";
 
@@ -574,6 +621,8 @@ function hardAllowedPrefixes(cat: HardCategory): string[] | null {
       return ["charities/"];
     case "systems":
       return ["systems/"];
+    case "tablet_signup":
+      return ["core/"];  
     case "pdfs":
       return ["pdfs/"];
     case "product_knowledge":
@@ -676,7 +725,7 @@ function pickStandardCloseSource(sources: string[]) {
 }
 
 
-export async function ragSearch(query: string, opts: RagOptions = {}) {
+export async function ragSearch(query: string, opts: RagOptions = {}): Promise<RagSearchResult> {
   const state = getRagState();
 
   const topK = Math.max(1, Math.min(50, opts.topK ?? 6));
@@ -690,6 +739,7 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
 
   // IMPORTANT: use cleanQuery for intent + gating (so hint text can’t misclassify)
   const hardCat = detectHardCategory(cleanQuery);
+  const isTabletVerbatim = hardCat === "tablet_signup";
 
   console.log("[RAG] query:", query.slice(0, 180));
   console.log("[RAG] cleanQuery:", cleanQuery.slice(0, 180));
@@ -697,8 +747,9 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
 
 
   if (!qTokens.length) {
-  return { context: "", usedSources: [] as string[], hardCategory: hardCat };
-}
+  return { context: "", usedSources: [], hardCategory: hardCat, verbatim: isTabletVerbatim };
+  }
+
 
   // -------- FORCE PITCH BUNDLE (prevents hallucinated Problem/Solution) --------
   // If this is a charity pitch request, we ALWAYS assemble context from:
@@ -715,7 +766,7 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
 
       // If the charity doc itself is missing, fail-closed (no hallucinations).
       if (!charitySource) {
-        return { context: "", usedSources: [] as string[], hardCategory: hardCat };
+        return { context: "", usedSources: [], hardCategory: hardCat, verbatim: isTabletVerbatim };
       }
 
       const usedSources: string[] = [];
@@ -749,7 +800,13 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
         context += (context ? "\n\n" : "") + block;
       }
 
-      return { context, usedSources, hardCategory: hardCat };
+      return {
+        context,
+        usedSources,
+        hardCategory: hardCat,
+        verbatim: isTabletVerbatim,
+      };
+
     }
   }
 
@@ -807,7 +864,7 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
     const best = scoredAll.filter((x) => x.score > 0).slice(0, topK);
 
     if (!best.length) {
-      return { context: "", usedSources: [] as string[], hardCategory: hardCat };
+      return { context: "", usedSources: [], hardCategory: hardCat, verbatim: isTabletVerbatim };
     }
 
     candidates = best.map((b) => b.idx);
@@ -829,7 +886,7 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
 
   // Fail-closed: if we don't have the real doc yet, return no context.
   if (!candidates.length) {
-    return { context: "", usedSources: [] as string[], hardCategory: hardCat };
+    return { context: "", usedSources: [], hardCategory: hardCat, verbatim: isTabletVerbatim };
   }
 
     }
@@ -841,15 +898,29 @@ export async function ragSearch(query: string, opts: RagOptions = {}) {
   if (allowed && allowed.length) {
     const allowedLower = allowed.map((p) => p.toLowerCase());
 
-    // IMPORTANT: gate the FINAL candidates (after pinning + fallback)
     candidates = candidates.filter((idx) => {
       const src = state.chunks[idx]?.source?.toLowerCase() ?? "";
-      return allowedLower.some((p) => src.startsWith(p));
+
+      // Base hard-gate
+      if (!allowedLower.some((p) => src.startsWith(p))) return false;
+
+      // EXTRA hard-gate for tablet signup: only allow the tablet signup doc
+      if (hardCat === "tablet_signup") {
+        // Adjust these hints to match your actual filename
+        // (works well with: "tablet signup process", "tablet_signup_process", etc.)
+        const isTabletDoc =
+          src.includes("tablet") &&
+          (src.includes("signup") || src.includes("sign_up") || src.includes("sign-up"));
+
+        return isTabletDoc;
+      }
+
+      return true;
     });
 
     // Fail-closed: if this was a hard category but nothing matched, return no context.
     if (!candidates.length) {
-       return { context: "", usedSources: [] as string[], hardCategory: hardCat };
+      return { context: "", usedSources: [], hardCategory: hardCat, verbatim: isTabletVerbatim };
     }
   }
 
@@ -1066,7 +1137,8 @@ scored.sort((a, b) =>
     context += (context ? "\n\n" : "") + block;
   }
 
-  return { context, usedSources, hardCategory: hardCat };
+  return { context, usedSources, hardCategory: hardCat, verbatim: isTabletVerbatim };
+
 }
 
 // Optional warmup hook so /api/warmup can force indexing
