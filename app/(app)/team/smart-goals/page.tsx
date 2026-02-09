@@ -101,10 +101,7 @@ function TextArea(props: {
         outline: "none",
         resize: "vertical",
         lineHeight: 1.35,
-
-        height: "100%",
         minHeight: 120,
-
         ...props.style,
       }}
     />
@@ -156,7 +153,6 @@ export default function SmartGoalsPage() {
       // ignore
     }
 
-    // first-time seed
     const seed = emptyGoal();
     setGoals([seed]);
     setActiveId(seed.id);
@@ -179,9 +175,7 @@ export default function SmartGoalsPage() {
   }, [goals]);
 
   function updateActive(patch: Partial<SmartGoal>) {
-    setGoals((prev) =>
-      prev.map((g) => (g.id === activeId ? { ...g, ...patch } : g))
-    );
+    setGoals((prev) => prev.map((g) => (g.id === activeId ? { ...g, ...patch } : g)));
   }
 
   function addGoal() {
@@ -213,7 +207,6 @@ export default function SmartGoalsPage() {
     setGoals((prev) => {
       const remaining = prev.filter((g) => g.id !== activeId);
       const nextList = remaining.length ? remaining : [emptyGoal()];
-      // choose new active
       setActiveId(nextList[0].id);
       return nextList;
     });
@@ -229,7 +222,6 @@ export default function SmartGoalsPage() {
         fontFamily: "sans-serif",
       }}
     >
-      {/* Small global styles for placeholders/scrollbars */}
       <style jsx global>{`
         .fcInput::placeholder,
         .fcTextarea::placeholder {
@@ -246,24 +238,33 @@ export default function SmartGoalsPage() {
           height: 0;
         }
 
-        /* SMART Goals: responsive two-column layout */
+        /* Layout: desktop list-left / editor-right */
         .fcSmartLayout {
+          margin-top: 12px;
           display: grid;
           grid-template-columns: 280px minmax(0, 1fr);
+          grid-template-areas: "list editor";
           gap: 12px;
           align-items: start;
         }
-        @media (max-width: 900px) {
-          .fcSmartLayout {
-            grid-template-columns: 1fr;
-          }
+        .fcSmartList {
+          grid-area: list;
+          min-width: 0;
         }
-
-        /* prevent grid children from forcing overflow */
-        .fcMin0 {
+        .fcSmartEditor {
+          grid-area: editor;
           min-width: 0;
         }
 
+        /* Mobile: editor first, list below */
+        @media (max-width: 900px) {
+          .fcSmartLayout {
+            grid-template-columns: 1fr;
+            grid-template-areas:
+              "editor"
+              "list";
+          }
+        }
       `}</style>
 
       <div
@@ -348,82 +349,10 @@ export default function SmartGoalsPage() {
         </div>
 
         {/* Main layout */}
-        <div className="fcSmartLayout" style={{ marginTop: 12 }}>
-
-          {/* LEFT: list */}
+        <div className="fcSmartLayout">
+          {/* RIGHT: editor (shows first on mobile) */}
           <div
-            className="fcMin0"
-            style={{
-              borderRadius: 14,
-              border: "1px solid rgba(148,163,184,0.18)",
-              background: "rgba(148,163,184,0.04)",
-              padding: 14,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              minHeight: 720,
-            }}
-          >
-            <div style={{ fontWeight: 1000 }}>Your SMART Goals</div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-              {goals.map((g) => {
-                const active = g.id === activeId;
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => setActiveId(g.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: 10,
-                      borderRadius: 12,
-                      border: active
-                        ? "1px solid rgba(56,189,248,0.35)"
-                        : "1px solid rgba(148,163,184,0.18)",
-                      background: active ? "rgba(56,189,248,0.10)" : "rgba(148,163,184,0.06)",
-                      color: "#e5e7eb",
-                      cursor: "pointer",
-                    }}
-                    title="Select goal"
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                      <div style={{ fontWeight: 1000, fontSize: 13 }}>
-                        {g.title?.trim() ? g.title.trim() : "Untitled Goal"}
-                      </div>
-                      <div style={{ color: "rgba(148,163,184,0.9)", fontWeight: 900, fontSize: 11 }}>
-                        {new Date(g.createdAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div style={{ marginTop: 4, color: "rgba(148,163,184,0.9)", fontWeight: 850, fontSize: 12 }}>
-                      Tap to edit
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Clear All (BOTTOM of left list) */}
-            <button
-              onClick={clearAll}
-              style={{
-                marginTop: 8,
-                padding: "10px 12px",
-                borderRadius: 12,
-                fontWeight: 950,
-                border: "1px solid rgba(248,113,113,0.35)",
-                background: "rgba(248,113,113,0.12)",
-                color: "#fecaca",
-                cursor: "pointer",
-              }}
-              title="Clear all saved SMART Goals"
-            >
-              Clear All Saved SMART Goals
-            </button>
-          </div>
-
-          {/* RIGHT: editor */}
-          <div
-            className="fcMin0"
+            className="fcSmartEditor"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -601,7 +530,7 @@ Sign up for the next road trip, Network with a country high roller or office own
               </div>
             </div>
 
-            {/* Delete this SMART Goal (BOTTOM under Final Reflection) */}
+            {/* Delete this SMART Goal */}
             <button
               onClick={deleteActiveGoal}
               style={{
@@ -634,6 +563,72 @@ Sign up for the next road trip, Network with a country high roller or office own
             >
               Local-first MVP note: this saves to your browser (localStorage). Later we can add “Save to Supabase” for teams/offices.
             </div>
+          </div>
+
+          {/* LEFT: list (moves BELOW editor on mobile) */}
+          <div
+            className="fcSmartList"
+            style={{
+              borderRadius: 14,
+              border: "1px solid rgba(148,163,184,0.18)",
+              background: "rgba(148,163,184,0.04)",
+              padding: 14,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              minHeight: 280,
+            }}
+          >
+            <div style={{ fontWeight: 1000 }}>Your SMART Goals</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {goals.map((g) => {
+                const active = g.id === activeId;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => setActiveId(g.id)}
+                    style={{
+                      textAlign: "left",
+                      padding: 10,
+                      borderRadius: 12,
+                      border: active ? "1px solid rgba(56,189,248,0.35)" : "1px solid rgba(148,163,184,0.18)",
+                      background: active ? "rgba(56,189,248,0.10)" : "rgba(148,163,184,0.06)",
+                      color: "#e5e7eb",
+                      cursor: "pointer",
+                    }}
+                    title="Select goal"
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                      <div style={{ fontWeight: 1000, fontSize: 13 }}>{g.title?.trim() ? g.title.trim() : "Untitled Goal"}</div>
+                      <div style={{ color: "rgba(148,163,184,0.9)", fontWeight: 900, fontSize: 11 }}>
+                        {new Date(g.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 4, color: "rgba(148,163,184,0.9)", fontWeight: 850, fontSize: 12 }}>
+                      Tap to edit
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={clearAll}
+              style={{
+                marginTop: 8,
+                padding: "10px 12px",
+                borderRadius: 12,
+                fontWeight: 950,
+                border: "1px solid rgba(248,113,113,0.35)",
+                background: "rgba(248,113,113,0.12)",
+                color: "#fecaca",
+                cursor: "pointer",
+              }}
+              title="Clear all saved SMART Goals"
+            >
+              Clear All Saved SMART Goals
+            </button>
           </div>
         </div>
       </div>

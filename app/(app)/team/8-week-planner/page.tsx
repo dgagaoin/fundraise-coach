@@ -73,13 +73,10 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TextInput(props: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
+function TextInput(props: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <input
+      className="fcInput"
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       placeholder={props.placeholder}
@@ -107,6 +104,7 @@ function TextArea(props: {
 }) {
   return (
     <textarea
+      className="fcTextarea"
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       placeholder={props.placeholder}
@@ -192,17 +190,12 @@ export default function EightWeekPlannerPage() {
 
   function updateActive(partial: Partial<EightWeekPlan>) {
     setPlans((prev) =>
-      prev.map((p) =>
-        p.id === activeId ? { ...p, ...partial, updatedAt: new Date().toISOString() } : p
-      )
+      prev.map((p) => (p.id === activeId ? { ...p, ...partial, updatedAt: new Date().toISOString() } : p))
     );
   }
 
   function updateWeek(
-    key: keyof Pick<
-      EightWeekPlan,
-      "week1" | "week2" | "week3" | "week4" | "week5" | "week6" | "week7" | "week8"
-    >,
+    key: keyof Pick<EightWeekPlan, "week1" | "week2" | "week3" | "week4" | "week5" | "week6" | "week7" | "week8">,
     block: Partial<WeekBlock>
   ) {
     if (!activePlan) return;
@@ -244,16 +237,16 @@ export default function EightWeekPlannerPage() {
     });
   }
 
-  const weekExamples: Record<string, string> = {
-    week1: "2 new starts",
-    week2: "New starts become independent, 1 new start",
-    week3: "Teach MTP to FRs, 2 new starts",
-    week4: "Take best FR on road trip, show how to make $1000/week",
-    week5: "Promote first leader, 4 field reps, 2 new starts",
-    week6: "1 promoted leader, 4 field reps, 2 new starts",
-    week7: "Promote 1st leader, promote 2nd leader, 2 new starts",
-    week8: "2 leaders on my team",
-  };
+  const weekCards = [
+    ["week1", "Week 1", "What are the first things I need or need to do to start?", "2 new starts"],
+    ["week2", "Week 2", "What resources have I already gathered and do I need more?", "New starts become independent, 1 new start"],
+    ["week3", "Week 3", "What actions am I taking consistently?", "Teach MTP to FRs, 2 new starts"],
+    ["week4", "Week 4", "What actions of mine are compounding?", "Take best FR on road trip, show how to make $1000/week"],
+    ["week5", "Week 5", "What am I heavily working on with the goal in mind?", "Promote first leader, 4 field reps, 2 new starts"],
+    ["week6", "Week 6", "What have I completed or am close to completing?", "1 promoted leader, 4 field reps, 2 new starts"],
+    ["week7", "Week 7", "What do I need to have done before the final week of my goal?", "Promote 1st leader, promote 2nd leader, 2 new starts"],
+    ["week8", "Week 8", "What have I accomplished by this time?", "2 leaders on my team"],
+  ] as Array<[keyof EightWeekPlan, string, string, string]>;
 
   return (
     <main
@@ -266,31 +259,40 @@ export default function EightWeekPlannerPage() {
       }}
     >
       <style jsx global>{`
-        input::placeholder,
-        textarea::placeholder {
+        .fcInput::placeholder,
+        .fcTextarea::placeholder {
           color: rgba(148, 163, 184, 0.75);
           font-weight: 800;
           font-size: 13px;
           line-height: 1.35;
         }
 
-        /* 8 Week Planner: responsive two-column layout */
-        .fcEightLayout {
+        /* Layout: desktop list-left / editor-right */
+        .fc8Layout {
           margin-top: 14px;
           display: grid;
           grid-template-columns: 280px minmax(0, 1fr);
+          grid-template-areas: "list editor";
           gap: 12px;
           align-items: start;
         }
-        @media (max-width: 900px) {
-          .fcEightLayout {
-            grid-template-columns: 1fr;
-          }
+        .fc8List {
+          grid-area: list;
+          min-width: 0;
+        }
+        .fc8Editor {
+          grid-area: editor;
+          min-width: 0;
         }
 
-        /* critical: prevents grid children from forcing horizontal scroll */
-        .fcMin0 {
-          min-width: 0;
+        /* Mobile: editor first, list below */
+        @media (max-width: 900px) {
+          .fc8Layout {
+            grid-template-columns: 1fr;
+            grid-template-areas:
+              "editor"
+              "list";
+          }
         }
       `}</style>
 
@@ -366,9 +368,9 @@ export default function EightWeekPlannerPage() {
         >
           <div style={{ fontWeight: 1000, marginBottom: 8 }}>What is an 8 Week Plan?</div>
           <div style={{ color: "#cbd5e1", fontWeight: 800, lineHeight: 1.45, fontSize: 13 }}>
-            An 8 Week Plan is a simple SMART-style structure: you define an <b>end goal</b>, then work backwards from Week 8 to
-            Week 1 to break the goal into smaller, manageable parts. It’s useful for individual growth <i>and</i> team planning in
-            sales + marketing leadership.
+            An 8 Week Plan is a simple SMART-style structure: you define an <b>end goal</b>, then work backwards from Week 8 to Week 1
+            to break the goal into smaller, manageable parts. It’s useful for individual growth <i>and</i> team planning in sales +
+            marketing leadership.
             <div style={{ marginTop: 8, color: "rgba(148,163,184,0.95)" }}>
               How do you eat a giant pizza? <b>One slice at a time.</b>
             </div>
@@ -385,9 +387,12 @@ export default function EightWeekPlannerPage() {
             >
               <div style={{ fontWeight: 950, marginBottom: 6 }}>How to use this</div>
               <div style={{ color: "#cbd5e1", fontWeight: 800, fontSize: 13, lineHeight: 1.45 }}>
-                1) Write the End Goal.<br />
-                2) Start with Week 8: “What must be true by then?”<br />
-                3) Walk backwards: Week 7 → 1.<br />
+                1) Write the End Goal.
+                <br />
+                2) Start with Week 8: “What must be true by then?”
+                <br />
+                3) Walk backwards: Week 7 → 1.
+                <br />
                 4) Keep actions small, specific, and trackable.
               </div>
             </div>
@@ -402,83 +407,19 @@ export default function EightWeekPlannerPage() {
             >
               <div style={{ fontWeight: 950, marginBottom: 6 }}>Leadership angle</div>
               <div style={{ color: "#cbd5e1", fontWeight: 800, fontSize: 13, lineHeight: 1.45 }}>
-                For teams: plan coaching focuses, promotions, and road-trip readiness.<br />
+                For teams: plan coaching focuses, promotions, and road-trip readiness.
+                <br />
                 For individuals: plan skill reps, confidence wins, and output goals.
               </div>
             </div>
           </div>
         </div>
 
-        {/* Layout: list + editor (RESPONSIVE) */}
-        <div className="fcEightLayout">
-          {/* Left: Plan list */}
+        {/* Layout: editor first on mobile, list below */}
+        <div className="fc8Layout">
+          {/* Right: Editor (shows first on mobile) */}
           <div
-            className="fcMin0"
-            style={{
-              borderRadius: 14,
-              border: "1px solid rgba(148,163,184,0.18)",
-              background: "rgba(148,163,184,0.04)",
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              minHeight: 520,
-            }}
-          >
-            <div style={{ fontWeight: 1000 }}>Your 8 Week Plans</div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {plans.map((p) => {
-                const active = p.id === activeId;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setActiveId(p.id)}
-                    style={{
-                      textAlign: "left",
-                      padding: 10,
-                      borderRadius: 12,
-                      border: active ? "1px solid rgba(56,189,248,0.45)" : "1px solid rgba(148,163,184,0.18)",
-                      background: active ? "rgba(56,189,248,0.10)" : "rgba(148,163,184,0.05)",
-                      color: "#e5e7eb",
-                      cursor: "pointer",
-                    }}
-                    title="Tap to edit"
-                  >
-                    <div style={{ fontWeight: 950, fontSize: 13, marginBottom: 4, lineHeight: 1.25 }}>
-                      {p.title || "Untitled 8-Week Plan"}
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(148,163,184,0.9)" }}>
-                      Updated: {fmtDateShort(p.updatedAt)}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ marginTop: "auto" }}>
-              <button
-                onClick={clearAll}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  fontWeight: 1000,
-                  border: "1px solid rgba(248,113,113,0.30)",
-                  background: "rgba(248,113,113,0.10)",
-                  color: "#fecaca",
-                  cursor: "pointer",
-                }}
-                title="Clear all saved 8-week plans"
-              >
-                Clear All Saved 8-Week Plans
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Editor */}
-          <div
-            className="fcMin0"
+            className="fc8Editor"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -516,40 +457,19 @@ export default function EightWeekPlannerPage() {
                 </div>
 
                 {/* Weeks */}
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                    gap: 12,
-                  }}
-                >
-                  {(
-                    [
-                      ["week1", "Week 1", "What are the first things I need or need to do to start?"],
-                      ["week2", "Week 2", "What resources have I already gathered and do I need more?"],
-                      ["week3", "Week 3", "What actions am I taking consistently?"],
-                      ["week4", "Week 4", "What actions of mine are compounding?"],
-                      ["week5", "Week 5", "What am I heavily working on with the goal in mind?"],
-                      ["week6", "Week 6", "What have I completed or am close to completing?"],
-                      ["week7", "Week 7", "What do I need to have done before the final week of my goal?"],
-                      ["week8", "Week 8", "What have I accomplished by this time?"],
-                    ] as Array<[keyof EightWeekPlan, string, string]>
-                  ).map(([key, title, prompt]) => {
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+                  {weekCards.map(([key, title, prompt, example]) => {
                     if (!String(key).startsWith("week")) return null;
                     const wk = (activePlan as any)[key] as WeekBlock;
-                    const keyStr = String(key);
-                    const example = weekExamples[keyStr] ?? "";
 
                     return (
                       <div
-                        key={keyStr}
+                        key={String(key)}
                         style={{
                           borderRadius: 14,
                           border: "1px solid rgba(148,163,184,0.18)",
                           background: "rgba(148,163,184,0.04)",
                           padding: 12,
-                          minWidth: 0,
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -569,29 +489,11 @@ export default function EightWeekPlannerPage() {
                           {prompt}
                         </div>
 
-                        {/* Opaque example (your list) */}
-                        <div
-                          style={{
-                            marginTop: 8,
-                            padding: 10,
-                            borderRadius: 12,
-                            border: "1px solid rgba(148,163,184,0.16)",
-                            background: "rgba(148,163,184,0.03)",
-                            color: "rgba(203,213,225,0.92)",
-                            fontWeight: 850,
-                            fontSize: 12,
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          <span style={{ fontWeight: 1000, color: "rgba(148,163,184,0.95)" }}>Example: </span>
-                          {example}
-                        </div>
-
                         <div style={{ marginTop: 8 }}>
                           <TextArea
                             value={wk.promptAnswer}
                             onChange={(v) => updateWeek(key as any, { promptAnswer: v })}
-                            placeholder="Write your notes / action plan here..."
+                            placeholder={`Example: ${example}\n\nWrite your notes / action plan here...`}
                             rows={6}
                             minHeight={140}
                           />
@@ -637,6 +539,71 @@ export default function EightWeekPlannerPage() {
                 </div>
               </>
             )}
+          </div>
+
+          {/* Left: Plan list (moves BELOW editor on mobile) */}
+          <div
+            className="fc8List"
+            style={{
+              borderRadius: 14,
+              border: "1px solid rgba(148,163,184,0.18)",
+              background: "rgba(148,163,184,0.04)",
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              minHeight: 280,
+            }}
+          >
+            <div style={{ fontWeight: 1000 }}>Your 8 Week Plans</div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {plans.map((p) => {
+                const active = p.id === activeId;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setActiveId(p.id)}
+                    style={{
+                      textAlign: "left",
+                      padding: 10,
+                      borderRadius: 12,
+                      border: active ? "1px solid rgba(56,189,248,0.45)" : "1px solid rgba(148,163,184,0.18)",
+                      background: active ? "rgba(56,189,248,0.10)" : "rgba(148,163,184,0.05)",
+                      color: "#e5e7eb",
+                      cursor: "pointer",
+                    }}
+                    title="Tap to edit"
+                  >
+                    <div style={{ fontWeight: 950, fontSize: 13, marginBottom: 4, lineHeight: 1.25 }}>
+                      {p.title || "Untitled 8-Week Plan"}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 850, color: "rgba(148,163,184,0.9)" }}>
+                      Updated: {fmtDateShort(p.updatedAt)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* tighter spacing (no giant empty gap on mobile) */}
+            <button
+              onClick={clearAll}
+              style={{
+                marginTop: 8,
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 12,
+                fontWeight: 1000,
+                border: "1px solid rgba(248,113,113,0.30)",
+                background: "rgba(248,113,113,0.10)",
+                color: "#fecaca",
+                cursor: "pointer",
+              }}
+              title="Clear all saved 8-week plans"
+            >
+              Clear All Saved 8-Week Plans
+            </button>
           </div>
         </div>
       </div>
