@@ -206,6 +206,24 @@ export default function WeeklyPlanPage() {
           width: 0;
           height: 0;
         }
+          /* Mobile fixes for Last Week Snapshot layout */
+          @media (max-width: 520px) {
+            /* Collapse the 12-column snapshot grid into a single column */
+            .lwGrid {
+              grid-template-columns: 1fr !important;
+            }
+
+            /* All snapshot items take full width */
+            .lwGrid > div {
+              grid-column: 1 / -1 !important;
+            }
+
+            /* Raised Last Week tiles stack cleanly */
+            .lwRaisedGrid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+
       `}</style>
 
       <div
@@ -311,6 +329,7 @@ export default function WeeklyPlanPage() {
           <div style={{ fontWeight: 1000, marginBottom: 10 }}>Last Week Snapshot</div>
 
           <div
+            className="lwGrid"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(12, 1fr)",
@@ -347,7 +366,15 @@ export default function WeeklyPlanPage() {
                   padding: 10,
                 }}
               >
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+                <div
+                  className="lwRaisedGrid"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 10,
+                  }}
+                >
+
                   <div>
                     <FieldLabel>Monthly DV</FieldLabel>
                     <TextInput
