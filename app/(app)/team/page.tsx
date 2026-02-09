@@ -8,9 +8,11 @@ type ToolCardProps = {
   description: string;
   bullets: string[];
   badge?: string;
+  href?: string; // NEW: optional route
 };
 
-function ToolCard({ title, description, bullets, badge }: ToolCardProps) {
+
+function ToolCard({ title, description, bullets, badge, href }: ToolCardProps) {
   return (
     <div
       style={{
@@ -54,22 +56,41 @@ function ToolCard({ title, description, bullets, badge }: ToolCardProps) {
       </ul>
 
       <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          disabled
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            fontWeight: 1000,
-            border: "1px solid rgba(148,163,184,0.22)",
-            background: "rgba(148,163,184,0.06)",
-            color: "rgba(229,231,235,0.65)",
-            cursor: "not-allowed",
-          }}
-          title="Placeholder (not wired yet)"
-        >
-          Open →
-        </button>
+        {href ? (
+          <a
+            href={href}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              fontWeight: 1000,
+              border: "1px solid rgba(56,189,248,0.35)",
+              background: "rgba(56,189,248,0.10)",
+              color: "#7dd3fc",
+              cursor: "pointer",
+              textDecoration: "none",
+            }}
+            title={`Open ${title}`}
+          >
+            Open →
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              fontWeight: 1000,
+              border: "1px solid rgba(148,163,184,0.22)",
+              background: "rgba(148,163,184,0.06)",
+              color: "rgba(229,231,235,0.65)",
+              cursor: "not-allowed",
+            }}
+            title="Placeholder (not wired yet)"
+          >
+            Open →
+          </button>
+        )}
       </div>
     </div>
   );
@@ -322,6 +343,7 @@ export default function TeamPage() {
             "Who needs help & what drill they need",
             "Midweek check + weekend review",
           ]}
+          href="/team/weekly-plan"
         />
       </div>
 
