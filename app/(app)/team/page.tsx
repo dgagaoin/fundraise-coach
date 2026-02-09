@@ -184,14 +184,16 @@ export default function TeamPage() {
         />
 
         <ToolCard
-          title="SMART Goal Planner"
+        title="SMART Goal Planner"
           description="Goal setting that translates into daily behaviors (inputs) and weekly outcomes (outputs)."
           bullets={[
             "Set weekly sales goal + daily minimum",
             "Behavior goals (contacts/hour, quality convos)",
             "Auto “What to focus on this week” prompt",
           ]}
+          href="/team/smart-goals"
         />
+
 
         <ToolCard
           title="8 Week Planner"
@@ -201,7 +203,9 @@ export default function TeamPage() {
             "Promotion readiness checkpoints",
             "Coaching cadence & review points",
           ]}
+          href="/team/8-week-planner"
         />
+
 
         <ToolCard
           title="Break Even Calculator"
@@ -283,72 +287,7 @@ export default function TeamPage() {
             "Pre-trip training & post-trip debrief",
           ]}
         />
-      </div>
-
-      {pdfPath && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            background: "rgba(0,0,0,0.75)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onClick={closePdf}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 980,
-              height: "85vh",
-              background: "#0b0b0b",
-              borderRadius: 16,
-              border: "1px solid rgba(56,189,248,0.35)",
-              overflow: "hidden",
-              position: "relative",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={closePdf}
-              style={{
-                position: "absolute",
-                top: 10,
-                right: 10,
-                zIndex: 2,
-                padding: "10px 12px",
-                borderRadius: 12,
-                fontWeight: 900,
-                border: "1px solid rgba(148,163,184,0.22)",
-                background: "rgba(148,163,184,0.06)",
-                color: "#e5e7eb",
-                cursor: "pointer",
-                lineHeight: 1,
-              }}
-              aria-label="Close PDF"
-              title="Close"
-            >
-              ✕
-            </button>
-
-            <iframe
-              src={`/api/pdf?path=${encodeURIComponent(pdfPath)}`}
-              title={pdfPath}
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-                display: "block",
-                background: "#0b0b0b",
-              }}
-            />
-          </div>
-        </div>
-      )}
+    </div>
 
       <div
         style={{
