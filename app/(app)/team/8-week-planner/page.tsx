@@ -198,7 +198,13 @@ export default function EightWeekPlannerPage() {
     );
   }
 
-  function updateWeek(key: keyof Pick<EightWeekPlan, "week1" | "week2" | "week3" | "week4" | "week5" | "week6" | "week7" | "week8">, block: Partial<WeekBlock>) {
+  function updateWeek(
+    key: keyof Pick<
+      EightWeekPlan,
+      "week1" | "week2" | "week3" | "week4" | "week5" | "week6" | "week7" | "week8"
+    >,
+    block: Partial<WeekBlock>
+  ) {
     if (!activePlan) return;
     const current = activePlan[key];
     updateActive({ [key]: { ...current, ...block } } as any);
@@ -238,6 +244,17 @@ export default function EightWeekPlannerPage() {
     });
   }
 
+  const weekExamples: Record<string, string> = {
+    week1: "2 new starts",
+    week2: "New starts become independent, 1 new start",
+    week3: "Teach MTP to FRs, 2 new starts",
+    week4: "Take best FR on road trip, show how to make $1000/week",
+    week5: "Promote first leader, 4 field reps, 2 new starts",
+    week6: "1 promoted leader, 4 field reps, 2 new starts",
+    week7: "Promote 1st leader, promote 2nd leader, 2 new starts",
+    week8: "2 leaders on my team",
+  };
+
   return (
     <main
       style={{
@@ -255,6 +272,25 @@ export default function EightWeekPlannerPage() {
           font-weight: 800;
           font-size: 13px;
           line-height: 1.35;
+        }
+
+        /* 8 Week Planner: responsive two-column layout */
+        .fcEightLayout {
+          margin-top: 14px;
+          display: grid;
+          grid-template-columns: 280px minmax(0, 1fr);
+          gap: 12px;
+          align-items: start;
+        }
+        @media (max-width: 900px) {
+          .fcEightLayout {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* critical: prevents grid children from forcing horizontal scroll */
+        .fcMin0 {
+          min-width: 0;
         }
       `}</style>
 
@@ -339,7 +375,14 @@ export default function EightWeekPlannerPage() {
           </div>
 
           <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-            <div style={{ padding: 12, borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)", background: "rgba(148,163,184,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid rgba(148,163,184,0.18)",
+                background: "rgba(148,163,184,0.04)",
+              }}
+            >
               <div style={{ fontWeight: 950, marginBottom: 6 }}>How to use this</div>
               <div style={{ color: "#cbd5e1", fontWeight: 800, fontSize: 13, lineHeight: 1.45 }}>
                 1) Write the End Goal.<br />
@@ -349,7 +392,14 @@ export default function EightWeekPlannerPage() {
               </div>
             </div>
 
-            <div style={{ padding: 12, borderRadius: 12, border: "1px solid rgba(148,163,184,0.18)", background: "rgba(148,163,184,0.04)" }}>
+            <div
+              style={{
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid rgba(148,163,184,0.18)",
+                background: "rgba(148,163,184,0.04)",
+              }}
+            >
               <div style={{ fontWeight: 950, marginBottom: 6 }}>Leadership angle</div>
               <div style={{ color: "#cbd5e1", fontWeight: 800, fontSize: 13, lineHeight: 1.45 }}>
                 For teams: plan coaching focuses, promotions, and road-trip readiness.<br />
@@ -359,18 +409,11 @@ export default function EightWeekPlannerPage() {
           </div>
         </div>
 
-        {/* Layout: list + editor */}
-        <div
-          style={{
-            marginTop: 14,
-            display: "grid",
-            gridTemplateColumns: "280px 1fr",
-            gap: 12,
-            alignItems: "start",
-          }}
-        >
+        {/* Layout: list + editor (RESPONSIVE) */}
+        <div className="fcEightLayout">
           {/* Left: Plan list */}
           <div
+            className="fcMin0"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -435,6 +478,7 @@ export default function EightWeekPlannerPage() {
 
           {/* Right: Editor */}
           <div
+            className="fcMin0"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -472,7 +516,14 @@ export default function EightWeekPlannerPage() {
                 </div>
 
                 {/* Weeks */}
-                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                    gap: 12,
+                  }}
+                >
                   {(
                     [
                       ["week1", "Week 1", "What are the first things I need or need to do to start?"],
@@ -487,14 +538,18 @@ export default function EightWeekPlannerPage() {
                   ).map(([key, title, prompt]) => {
                     if (!String(key).startsWith("week")) return null;
                     const wk = (activePlan as any)[key] as WeekBlock;
+                    const keyStr = String(key);
+                    const example = weekExamples[keyStr] ?? "";
+
                     return (
                       <div
-                        key={String(key)}
+                        key={keyStr}
                         style={{
                           borderRadius: 14,
                           border: "1px solid rgba(148,163,184,0.18)",
                           background: "rgba(148,163,184,0.04)",
                           padding: 12,
+                          minWidth: 0,
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -512,6 +567,24 @@ export default function EightWeekPlannerPage() {
 
                         <div style={{ marginTop: 10, color: "rgba(148,163,184,0.95)", fontWeight: 850, fontSize: 12, lineHeight: 1.4 }}>
                           {prompt}
+                        </div>
+
+                        {/* Opaque example (your list) */}
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: 10,
+                            borderRadius: 12,
+                            border: "1px solid rgba(148,163,184,0.16)",
+                            background: "rgba(148,163,184,0.03)",
+                            color: "rgba(203,213,225,0.92)",
+                            fontWeight: 850,
+                            fontSize: 12,
+                            lineHeight: 1.35,
+                          }}
+                        >
+                          <span style={{ fontWeight: 1000, color: "rgba(148,163,184,0.95)" }}>Example: </span>
+                          {example}
                         </div>
 
                         <div style={{ marginTop: 8 }}>

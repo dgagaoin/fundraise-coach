@@ -245,6 +245,25 @@ export default function SmartGoalsPage() {
           width: 0;
           height: 0;
         }
+
+        /* SMART Goals: responsive two-column layout */
+        .fcSmartLayout {
+          display: grid;
+          grid-template-columns: 280px minmax(0, 1fr);
+          gap: 12px;
+          align-items: start;
+        }
+        @media (max-width: 900px) {
+          .fcSmartLayout {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        /* prevent grid children from forcing overflow */
+        .fcMin0 {
+          min-width: 0;
+        }
+
       `}</style>
 
       <div
@@ -329,17 +348,11 @@ export default function SmartGoalsPage() {
         </div>
 
         {/* Main layout */}
-        <div
-          style={{
-            marginTop: 14,
-            display: "grid",
-            gridTemplateColumns: "minmax(220px, 0.75fr) minmax(0, 2.25fr)",
-            gap: 12,
-            alignItems: "stretch",
-          }}
-        >
+        <div className="fcSmartLayout" style={{ marginTop: 12 }}>
+
           {/* LEFT: list */}
           <div
+            className="fcMin0"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -410,6 +423,7 @@ export default function SmartGoalsPage() {
 
           {/* RIGHT: editor */}
           <div
+            className="fcMin0"
             style={{
               borderRadius: 14,
               border: "1px solid rgba(148,163,184,0.18)",
@@ -603,7 +617,7 @@ Sign up for the next road trip, Network with a country high roller or office own
               }}
               title="Delete this SMART Goal"
             >
-              Delete this Smart Goal
+              Delete this SMART Goal
             </button>
 
             <div
