@@ -215,6 +215,7 @@ export default function TeamPage() {
             "Team size vs required production",
             "Scenario planning (slow week / road trip)",
           ]}
+          href="/team/break-even-calculator"
         />
 
         {/* COD Checklists (PDF) */}
@@ -286,7 +287,9 @@ export default function TeamPage() {
             "Target sites + schedule skeleton",
             "Pre-trip training & post-trip debrief",
           ]}
+          href="/team/road-trip-planner"
         />
+
     </div>
 
       <div
